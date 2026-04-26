@@ -174,7 +174,7 @@ end
 
 Menu.Position = {
     x = 50,
-    y = 140,
+    y = 170,
     width = 360,
     itemHeight = 34,
     mainMenuHeight = 26,
@@ -2125,18 +2125,20 @@ function Menu.DrawKeySelector(alpha)
 
     Menu.DrawTextEmphasis(textX, textY, rowText, textSize, 1.0, 1.0, 1.0, 1.0 * alpha)
 
-    local boxSize = 34
-    local boxX = startX + width - padding - boxSize
-    local boxY = rowY + (lineHeight / 2) - (boxSize / 2)
-    if Susano and Susano.DrawRectFilled then
-        Susano.DrawRectFilled(boxX, boxY, boxSize, boxSize, 0.12, 0.12, 0.12, 1.0 * alpha, 6)
-    else
-        Menu.DrawRect(boxX, boxY, boxSize, boxSize, 30, 30, 30, 255 * alpha)
-    end
-
     local keySize = 18
     local keyW = Menu.GetTextWidth(keyName, keySize)
-    Menu.DrawText(math.floor(boxX + (boxSize / 2) - (keyW / 2)), math.floor(boxY + (boxSize / 2) - (keySize / 2)), keyName, keySize, 1.0, 1.0, 1.0, 1.0 * alpha)
+    local boxHeight = 34
+    local boxPaddingX = 12
+    local boxWidth = math.max(boxHeight, math.floor(keyW + (boxPaddingX * 2)))
+    local boxX = startX + width - padding - boxWidth
+    local boxY = rowY + (lineHeight / 2) - (boxHeight / 2)
+    if Susano and Susano.DrawRectFilled then
+        Susano.DrawRectFilled(boxX, boxY, boxWidth, boxHeight, 0.12, 0.12, 0.12, 1.0 * alpha, 6)
+    else
+        Menu.DrawRect(boxX, boxY, boxWidth, boxHeight, 30, 30, 30, 255 * alpha)
+    end
+
+    Menu.DrawText(math.floor(boxX + (boxWidth / 2) - (keyW / 2)), math.floor(boxY + (boxHeight / 2) - (keySize / 2)), keyName, keySize, 1.0, 1.0, 1.0, 1.0 * alpha)
 end
 
 function Menu.DrawKeybindsInterface(alpha)
@@ -2600,7 +2602,7 @@ function Menu.IsKeyJustPressed(keyCode)
         return false
     end
 
-    local down, pressed = Susano.GetAsyncKeyState(keyCode)
+    local down, pressed = Menu.GetKeyState(keyCode)
     local wasDown = Menu.KeyStates[keyCode] or false
 
     if down == true then
@@ -2646,8 +2648,71 @@ Menu.KeyNames = {
     [0xA3] = "Right Ctrl", [0xA4] = "Left Alt", [0xA5] = "Right Alt"
 }
 
+Menu.LinkedKeyGroups = {
+    [0x10] = {0x10, 0xA0, 0xA1},
+    [0x11] = {0x11, 0xA2, 0xA3},
+    [0x12] = {0x12, 0xA4, 0xA5}
+}
+
+Menu.BindableKeys = {
+    0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D,
+    0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A,
+    0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
+    0x20, 0x1B, 0x08, 0x09, 0x10, 0x11, 0x12,
+    0x21, 0x22, 0x23, 0x24, 0x25, 0x26, 0x27, 0x28, 0x2D, 0x2E,
+    0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B
+}
+
 function Menu.GetKeyName(keyCode)
     return Menu.KeyNames[keyCode] or ("Key 0x" .. string.format("%02X", keyCode))
+end
+
+function Menu.GetKeyState(keyCode)
+    if not (Susano and Susano.GetAsyncKeyState) then
+        return false, false
+    end
+
+    local linkedKeys = Menu.LinkedKeyGroups[keyCode]
+    if linkedKeys then
+        local isDown = false
+        local isPressed = false
+
+        for _, linkedKeyCode in ipairs(linkedKeys) do
+            local down, pressed = Susano.GetAsyncKeyState(linkedKeyCode)
+            if down == true then
+                isDown = true
+            end
+            if pressed == true then
+                isPressed = true
+            end
+        end
+
+        return isDown, isPressed
+    end
+
+    local down, pressed = Susano.GetAsyncKeyState(keyCode)
+    return down == true, pressed == true
+end
+
+function Menu.CaptureBindableKey()
+    for _, keyCode in ipairs(Menu.BindableKeys) do
+        if keyCode ~= 0x0D then
+            local down, pressed = Menu.GetKeyState(keyCode)
+            local wasDown = Menu.KeyStates[keyCode] or false
+
+            if down == true then
+                Menu.KeyStates[keyCode] = true
+            else
+                Menu.KeyStates[keyCode] = false
+            end
+
+            if pressed == true or (down == true and not wasDown) then
+                return keyCode
+            end
+        end
+    end
+
+    return nil
 end
 
 function Menu.HandleInput()
@@ -2680,33 +2745,10 @@ function Menu.HandleInput()
             return
         end
 
-        local keysToCheck = {
-            0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D,
-            0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A,
-            0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
-            0x20, 0x1B, 0x08, 0x09, 0x10, 0x11, 0x12, 0x2E,
-            0x25, 0x26, 0x27, 0x28,
-            0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B
-        }
-
-        for _, keyCode in ipairs(keysToCheck) do
-            if keyCode ~= 0x0D then
-                local down, pressed = Susano.GetAsyncKeyState(keyCode)
-                if down == true or pressed == true then
-                    local wasDown = Menu.KeyStates[keyCode] or false
-                    if (pressed == true) or (down == true and not wasDown) then
-                        Menu.BindingKey = keyCode
-                        Menu.BindingKeyName = Menu.GetKeyName(keyCode)
-                        Menu.KeyStates[keyCode] = true
-                        break
-                    end
-                    if down == true then
-                        Menu.KeyStates[keyCode] = true
-                    else
-                        Menu.KeyStates[keyCode] = false
-                    end
-                end
-            end
+        local keyCode = Menu.CaptureBindableKey()
+        if keyCode then
+            Menu.BindingKey = keyCode
+            Menu.BindingKeyName = Menu.GetKeyName(keyCode)
         end
         return
     end
@@ -2724,33 +2766,10 @@ function Menu.HandleInput()
             return
         end
 
-        local keysToCheck = {
-            0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4A, 0x4B, 0x4C, 0x4D,
-            0x4E, 0x4F, 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5A,
-            0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39,
-            0x20, 0x1B, 0x08, 0x09, 0x10, 0x11, 0x12, 0x2E,
-            0x25, 0x26, 0x27, 0x28,
-            0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7A, 0x7B
-        }
-
-        for _, keyCode in ipairs(keysToCheck) do
-            if keyCode ~= 0x0D then
-                local down, pressed = Susano.GetAsyncKeyState(keyCode)
-                if down == true or pressed == true then
-                    local wasDown = Menu.KeyStates[keyCode] or false
-                    if (pressed == true) or (down == true and not wasDown) then
-                        Menu.SelectedKey = keyCode
-                        Menu.SelectedKeyName = Menu.GetKeyName(keyCode)
-                        Menu.KeyStates[keyCode] = true
-                        break
-                    end
-                    if down == true then
-                        Menu.KeyStates[keyCode] = true
-                    else
-                        Menu.KeyStates[keyCode] = false
-                    end
-                end
-            end
+        local keyCode = Menu.CaptureBindableKey()
+        if keyCode then
+            Menu.SelectedKey = keyCode
+            Menu.SelectedKeyName = Menu.GetKeyName(keyCode)
         end
         return
     end
@@ -2763,7 +2782,7 @@ function Menu.HandleInput()
                         if tab and tab.items then
                             for _, item in ipairs(tab.items) do
                                 if item and item.bindKey and (item.type == "toggle" or item.type == "action") then
-                                    local down, pressed = Susano.GetAsyncKeyState(item.bindKey)
+                                    local down, pressed = Menu.GetKeyState(item.bindKey)
                                     local wasDown = Menu.KeyStates[item.bindKey] or false
 
                                     if down == true then
@@ -2802,7 +2821,7 @@ function Menu.HandleInput()
 
     local toggleKeyCode = Menu.SelectedKey or 0x31
     if Susano and Susano.GetAsyncKeyState then
-        local down, pressed = Susano.GetAsyncKeyState(toggleKeyCode)
+        local down, pressed = Menu.GetKeyState(toggleKeyCode)
 
         local wasDown = Menu.KeyStates[toggleKeyCode] or false
         local keyPressed = false
