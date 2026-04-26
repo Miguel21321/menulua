@@ -286,12 +286,12 @@ end
 
 local function ResolveTextSize(size_px)
     local scale = Menu.Scale or 1.0
-    local resolvedSize = (size_px or 16) * scale
-    return math.max(1, RoundToNearestPixel(resolvedSize))
+    return math.max(1, (size_px or 16) * scale)
 end
 
 local function CanUseNativeTextRenderer()
-    return Menu.TextRenderer ~= "susano"
+    return false
+        and Menu.TextRenderer ~= "susano"
         and type(NativeSetTextFont) == "function"
         and type(NativeSetTextScale) == "function"
         and type(NativeSetTextColour) == "function"
@@ -406,23 +406,6 @@ function Menu.GetTextWidth(text, size_px)
     local resolvedText = tostring(text or "")
     local resolvedSize = ResolveTextSize(size_px)
 
-    if ShouldUseNativeTextRenderer() then
-        local beginWidthCommand = NativeBeginTextCommandGetWidth or NativeBeginTextCommandWidth
-        if type(beginWidthCommand) == "function" and type(NativeEndTextCommandGetWidth) == "function" then
-            local screenWidth = GetTextRenderScreenSize()
-            local addTextComponent = GetNativeTextAdder()
-
-            SetupNativeTextStyle(resolvedSize, 1.0, 1.0, 1.0, 1.0, false)
-            beginWidthCommand("STRING")
-            addTextComponent(resolvedText)
-
-            local normalizedWidth = NativeEndTextCommandGetWidth(true)
-            if type(normalizedWidth) == "number" and normalizedWidth > 0 then
-                return normalizedWidth * screenWidth
-            end
-        end
-    end
-
     if Susano and Susano.GetTextWidth then
         return Susano.GetTextWidth(resolvedText, resolvedSize)
     end
@@ -442,20 +425,9 @@ function Menu.DrawText(x, y, text, size_px, r, g, b, a)
     if b > 1.0 then b = b / 255.0 end
     if a > 1.0 then a = a / 255.0 end
 
-    if ShouldUseNativeTextRenderer() then
-        DrawTextRaw(x, y, text, resolvedSize, r, g, b, a, false)
-        return
+    if Susano and Susano.DrawText then
+        Susano.DrawText(x, y, tostring(text or ""), resolvedSize, r, g, b, a)
     end
-
-    local brightness = (r + g + b) / 3.0
-    if a > 0 and brightness > 0.35 and Menu.TextShadowEnabled ~= false then
-        local shadowAlpha = math.min(a * (resolvedSize >= 18 and 0.24 or 0.18), 0.28)
-        if shadowAlpha > 0.01 then
-            DrawTextRaw(x, y + 1, text, resolvedSize, 0.0, 0.0, 0.0, shadowAlpha, false)
-        end
-    end
-
-    DrawTextRaw(x, y, text, resolvedSize, r, g, b, a, false)
 end
 
 function Menu.DrawTextEmphasis(x, y, text, size_px, r, g, b, a)
@@ -470,16 +442,15 @@ function Menu.DrawTextEmphasis(x, y, text, size_px, r, g, b, a)
     if b > 1.0 then b = b / 255.0 end
     if a > 1.0 then a = a / 255.0 end
 
-    if ShouldUseNativeTextRenderer() then
-        DrawTextRaw(x, y, text, resolvedSize, r, g, b, a, true)
+    if not Susano or not Susano.DrawText then
         return
     end
 
-    local shadowOffset = resolvedSize >= 20 and 2 or 1
-    local shadowAlpha = math.min(a * 0.58, 0.62)
+    local shadowOffset = resolvedSize >= 20 and 1 or 1
+    local shadowAlpha = math.min(a * 0.38, 0.42)
 
-    DrawTextRaw(x, y + shadowOffset, text, resolvedSize, 0.0, 0.0, 0.0, shadowAlpha, false)
-    DrawTextRaw(x, y, text, resolvedSize, r, g, b, a, true)
+    Susano.DrawText(x, y + shadowOffset, tostring(text or ""), resolvedSize, 0.0, 0.0, 0.0, shadowAlpha)
+    Susano.DrawText(x, y, tostring(text or ""), resolvedSize, r, g, b, a)
 end
 
 local function MenuGetScreenSize()
