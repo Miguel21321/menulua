@@ -129,22 +129,22 @@ Menu.Colors = {
     FooterBlack = { r = 0, g = 0, b = 0 }
 }
 
-Menu.CurrentTheme = "Purple"
+Menu.CurrentTheme = "Blue"
 
 function Menu.ApplyTheme(themeName)
     if not themeName or type(themeName) ~= "string" then
-        themeName = "Purple"
+        themeName = "Blue"
     end
     
 
     local themeLower = string.lower(themeName)
     Menu.CurrentTheme = themeName
     
-    if themeLower == "red" then
+    if themeLower == "blue" or themeLower == "red" then
         Menu.Colors.HeaderPink = { r = 0, g = 221, b = 255 }
         Menu.Colors.SelectedBg = { r = 0, g = 221, b = 255 }
         Menu.Banner.imageUrl = "https://i.imgur.com/0wsZY4t.png"
-        Menu.CurrentTheme = "Red"
+        Menu.CurrentTheme = "Blue"
     elseif themeLower == "purple" then
         Menu.Colors.HeaderPink = { r = 148, g = 0, b = 211 }
         Menu.Colors.SelectedBg = { r = 148, g = 0, b = 211 }
@@ -161,10 +161,10 @@ function Menu.ApplyTheme(themeName)
         Menu.Banner.imageUrl = "https://i.imgur.com/0wsZY4t.png"
         Menu.CurrentTheme = "pink"
     else
-        Menu.Colors.HeaderPink = { r = 148, g = 0, b = 211 }
-        Menu.Colors.SelectedBg = { r = 148, g = 0, b = 211 }
+        Menu.Colors.HeaderPink = { r = 0, g = 221, b = 255 }
+        Menu.Colors.SelectedBg = { r = 0, g = 221, b = 255 }
         Menu.Banner.imageUrl = "https://i.imgur.com/0wsZY4t.png"
-        Menu.CurrentTheme = "Purple"
+        Menu.CurrentTheme = "Blue"
     end
 
     if Menu.Banner.enabled and Menu.Banner.imageUrl then
@@ -188,7 +188,8 @@ Menu.Position = {
     scrollbarPadding = 3,
     headerRadius = 6
 }
-Menu.Scale = 1.0
+Menu.DefaultScaleMultiplier = 1.16
+Menu.Scale = Menu.DefaultScaleMultiplier
 Menu.TextRenderer = "susano"
 Menu.TextFont = 0
 Menu.TextNativeScaleDivisor = 50.0
@@ -3093,7 +3094,7 @@ function Menu.HandleInput()
                                 if selectedItem.name == "Smooth Menu" then
                                     Menu.SmoothFactor = selectedItem.value / 100.0
                                 elseif selectedItem.name == "Menu Size" then
-                                    Menu.Scale = selectedItem.value / 100.0
+                                    Menu.Scale = (selectedItem.value / 100.0) * (Menu.DefaultScaleMultiplier or 1.0)
                                 end
                                 if selectedItem.onClick then selectedItem.onClick(selectedItem.value) end
                                 Menu.NotifyInteraction(selectedItem, "slider", selectedItem.value)
@@ -3177,7 +3178,7 @@ function Menu.HandleInput()
                                 if selectedItem.name == "Smooth Menu" then
                                     Menu.SmoothFactor = selectedItem.value / 100.0
                                 elseif selectedItem.name == "Menu Size" then
-                                    Menu.Scale = selectedItem.value / 100.0
+                                    Menu.Scale = (selectedItem.value / 100.0) * (Menu.DefaultScaleMultiplier or 1.0)
                                 end
                                 if selectedItem.onClick then selectedItem.onClick(selectedItem.value) end
                                 Menu.NotifyInteraction(selectedItem, "slider", selectedItem.value)
