@@ -174,7 +174,7 @@ end
 
 Menu.Position = {
     x = 50,
-    y = 120,
+    y = 140,
     width = 360,
     itemHeight = 34,
     mainMenuHeight = 26,
