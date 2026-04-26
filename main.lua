@@ -189,6 +189,11 @@ Menu.Position = {
     headerRadius = 6
 }
 Menu.Scale = 1.0
+Menu.TextRenderer = "native"
+Menu.TextFont = 0
+Menu.TextNativeScaleDivisor = 50.0
+Menu.TextNativeUseOutline = false
+Menu.TextShadowEnabled = true
 Menu.Notifications = {}
 Menu.NotificationDuration = 5000
 Menu.NotificationMaxVisible = 4
@@ -240,8 +245,43 @@ function Menu.DrawRect(x, y, width, height, r, g, b, a)
     end
 end
 
+local NativeSetTextFont = SetTextFont
+local NativeSetTextScale = SetTextScale
+local NativeSetTextColour = SetTextColour
+local NativeSetTextProportional = SetTextProportional
+local NativeSetTextEntry = SetTextEntry
+local NativeAddTextComponentString = AddTextComponentString
+local NativeAddTextComponentSubstringPlayerName = AddTextComponentSubstringPlayerName
+local NativeDrawText = DrawText
+local NativeSetTextCentre = SetTextCentre
+local NativeSetTextJustification = SetTextJustification
+local NativeSetTextWrap = SetTextWrap
+local NativeSetTextDropshadow = SetTextDropshadow
+local NativeSetTextDropShadow = SetTextDropShadow
+local NativeSetTextOutline = SetTextOutline
+local NativeBeginTextCommandGetWidth = BeginTextCommandGetWidth
+local NativeBeginTextCommandWidth = BeginTextCommandWidth
+local NativeEndTextCommandGetWidth = EndTextCommandGetWidth
+local NativeTextPipelineReady = nil
+
 local function RoundToNearestPixel(value)
     return math.floor((value or 0) + 0.5)
+end
+
+local function GetTextRenderScreenSize()
+    if Susano and Susano.GetScreenWidth and Susano.GetScreenHeight then
+        local width = Susano.GetScreenWidth()
+        local height = Susano.GetScreenHeight()
+        if width and height and width > 0 and height > 0 then
+            return width, height
+        end
+    end
+
+    if GetActiveScreenResolution then
+        return GetActiveScreenResolution()
+    end
+
+    return 1920, 1080
 end
 
 local function ResolveTextSize(size_px)
@@ -250,7 +290,102 @@ local function ResolveTextSize(size_px)
     return math.max(1, RoundToNearestPixel(resolvedSize))
 end
 
-local function DrawTextRaw(x, y, text, resolvedSize, r, g, b, a)
+local function CanUseNativeTextRenderer()
+    return Menu.TextRenderer ~= "susano"
+        and type(NativeSetTextFont) == "function"
+        and type(NativeSetTextScale) == "function"
+        and type(NativeSetTextColour) == "function"
+        and type(NativeSetTextProportional) == "function"
+        and type(NativeSetTextEntry) == "function"
+        and type(NativeDrawText) == "function"
+        and (type(NativeAddTextComponentSubstringPlayerName) == "function" or type(NativeAddTextComponentString) == "function")
+end
+
+local function GetNativeTextAdder()
+    if type(NativeAddTextComponentSubstringPlayerName) == "function" then
+        return NativeAddTextComponentSubstringPlayerName
+    end
+
+    return NativeAddTextComponentString
+end
+
+local function SetupNativeTextStyle(resolvedSize, r, g, b, a, emphasis)
+    local nativeScale = math.max(0.18, resolvedSize / (Menu.TextNativeScaleDivisor or 50.0))
+    local alpha255 = math.max(0, math.min(255, RoundToNearestPixel(a * 255)))
+
+    NativeSetTextFont(Menu.TextFont or 0)
+    NativeSetTextScale(nativeScale, nativeScale)
+    NativeSetTextProportional(1)
+    NativeSetTextColour(
+        math.max(0, math.min(255, RoundToNearestPixel(r * 255))),
+        math.max(0, math.min(255, RoundToNearestPixel(g * 255))),
+        math.max(0, math.min(255, RoundToNearestPixel(b * 255))),
+        alpha255
+    )
+
+    if NativeSetTextCentre then
+        NativeSetTextCentre(false)
+    end
+
+    if NativeSetTextJustification then
+        NativeSetTextJustification(0)
+    end
+
+    if NativeSetTextWrap then
+        NativeSetTextWrap(0.0, 1.0)
+    end
+
+    if NativeSetTextDropshadow then
+        local shadowAlpha = emphasis and math.min(255, RoundToNearestPixel(alpha255 * 0.92)) or math.min(210, RoundToNearestPixel(alpha255 * 0.72))
+        NativeSetTextDropshadow(1, 0, 0, 0, shadowAlpha)
+    elseif NativeSetTextDropShadow then
+        NativeSetTextDropShadow()
+    end
+
+    if emphasis and Menu.TextNativeUseOutline and NativeSetTextOutline then
+        NativeSetTextOutline()
+    end
+end
+
+local function ShouldUseNativeTextRenderer()
+    if not CanUseNativeTextRenderer() then
+        return false
+    end
+
+    if NativeTextPipelineReady ~= nil then
+        return NativeTextPipelineReady
+    end
+
+    local beginWidthCommand = NativeBeginTextCommandGetWidth or NativeBeginTextCommandWidth
+    if type(beginWidthCommand) ~= "function" or type(NativeEndTextCommandGetWidth) ~= "function" then
+        NativeTextPipelineReady = false
+        return false
+    end
+
+    local addTextComponent = GetNativeTextAdder()
+    SetupNativeTextStyle(16, 1.0, 1.0, 1.0, 1.0, false)
+    beginWidthCommand("STRING")
+    addTextComponent("W")
+
+    local width = NativeEndTextCommandGetWidth(true)
+    NativeTextPipelineReady = type(width) == "number" and width > 0
+    return NativeTextPipelineReady
+end
+
+local function DrawTextRaw(x, y, text, resolvedSize, r, g, b, a, emphasis)
+    local resolvedText = tostring(text or "")
+
+    if ShouldUseNativeTextRenderer() then
+        local screenWidth, screenHeight = GetTextRenderScreenSize()
+        local addTextComponent = GetNativeTextAdder()
+
+        SetupNativeTextStyle(resolvedSize, r, g, b, a, emphasis)
+        NativeSetTextEntry("STRING")
+        addTextComponent(resolvedText)
+        NativeDrawText(RoundToNearestPixel(x) / screenWidth, RoundToNearestPixel(y) / screenHeight)
+        return
+    end
+
     if not Susano or not Susano.DrawText then
         return
     end
@@ -258,7 +393,7 @@ local function DrawTextRaw(x, y, text, resolvedSize, r, g, b, a)
     Susano.DrawText(
         RoundToNearestPixel(x),
         RoundToNearestPixel(y),
-        tostring(text or ""),
+        resolvedText,
         resolvedSize,
         r,
         g,
@@ -270,6 +405,23 @@ end
 function Menu.GetTextWidth(text, size_px)
     local resolvedText = tostring(text or "")
     local resolvedSize = ResolveTextSize(size_px)
+
+    if ShouldUseNativeTextRenderer() then
+        local beginWidthCommand = NativeBeginTextCommandGetWidth or NativeBeginTextCommandWidth
+        if type(beginWidthCommand) == "function" and type(NativeEndTextCommandGetWidth) == "function" then
+            local screenWidth = GetTextRenderScreenSize()
+            local addTextComponent = GetNativeTextAdder()
+
+            SetupNativeTextStyle(resolvedSize, 1.0, 1.0, 1.0, 1.0, false)
+            beginWidthCommand("STRING")
+            addTextComponent(resolvedText)
+
+            local normalizedWidth = NativeEndTextCommandGetWidth(true)
+            if type(normalizedWidth) == "number" and normalizedWidth > 0 then
+                return normalizedWidth * screenWidth
+            end
+        end
+    end
 
     if Susano and Susano.GetTextWidth then
         return Susano.GetTextWidth(resolvedText, resolvedSize)
@@ -290,15 +442,20 @@ function Menu.DrawText(x, y, text, size_px, r, g, b, a)
     if b > 1.0 then b = b / 255.0 end
     if a > 1.0 then a = a / 255.0 end
 
+    if ShouldUseNativeTextRenderer() then
+        DrawTextRaw(x, y, text, resolvedSize, r, g, b, a, false)
+        return
+    end
+
     local brightness = (r + g + b) / 3.0
     if a > 0 and brightness > 0.35 and Menu.TextShadowEnabled ~= false then
         local shadowAlpha = math.min(a * (resolvedSize >= 18 and 0.24 or 0.18), 0.28)
         if shadowAlpha > 0.01 then
-            DrawTextRaw(x, y + 1, text, resolvedSize, 0.0, 0.0, 0.0, shadowAlpha)
+            DrawTextRaw(x, y + 1, text, resolvedSize, 0.0, 0.0, 0.0, shadowAlpha, false)
         end
     end
 
-    DrawTextRaw(x, y, text, resolvedSize, r, g, b, a)
+    DrawTextRaw(x, y, text, resolvedSize, r, g, b, a, false)
 end
 
 function Menu.DrawTextEmphasis(x, y, text, size_px, r, g, b, a)
@@ -313,11 +470,16 @@ function Menu.DrawTextEmphasis(x, y, text, size_px, r, g, b, a)
     if b > 1.0 then b = b / 255.0 end
     if a > 1.0 then a = a / 255.0 end
 
+    if ShouldUseNativeTextRenderer() then
+        DrawTextRaw(x, y, text, resolvedSize, r, g, b, a, true)
+        return
+    end
+
     local shadowOffset = resolvedSize >= 20 and 2 or 1
     local shadowAlpha = math.min(a * 0.58, 0.62)
 
-    DrawTextRaw(x, y + shadowOffset, text, resolvedSize, 0.0, 0.0, 0.0, shadowAlpha)
-    DrawTextRaw(x, y, text, resolvedSize, r, g, b, a)
+    DrawTextRaw(x, y + shadowOffset, text, resolvedSize, 0.0, 0.0, 0.0, shadowAlpha, false)
+    DrawTextRaw(x, y, text, resolvedSize, r, g, b, a, true)
 end
 
 local function MenuGetScreenSize()
@@ -1571,7 +1733,7 @@ function Menu.DrawCategories()
         end
     else
         local textY = itemY + mainMenuHeight / 2 - 7
-        local estimatedTextWidth = string.len(Menu.Categories[1].name) * 9
+        local estimatedTextWidth = Menu.GetTextWidth(Menu.Categories[1].name, 16)
         local textX = x + (width / 2) - (estimatedTextWidth / 2)
         Menu.DrawText(textX, textY, Menu.Categories[1].name, 16, Menu.Colors.TextWhite.r / 255.0, Menu.Colors.TextWhite.g / 255.0, Menu.Colors.TextWhite.b / 255.0, 1.0)
     end
