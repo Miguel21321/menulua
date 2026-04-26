@@ -189,7 +189,7 @@ Menu.Position = {
     headerRadius = 6
 }
 Menu.Scale = 1.0
-Menu.TextRenderer = "native"
+Menu.TextRenderer = "susano"
 Menu.TextFont = 0
 Menu.TextNativeScaleDivisor = 50.0
 Menu.TextNativeUseOutline = false
