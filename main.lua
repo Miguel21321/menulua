@@ -2798,15 +2798,27 @@ function Menu.HandleInput()
                                                 Menu.EditorMode = item.value
                                             end
                                             if item.onClick then
-                                                item.onClick(item.value)
+                                                local success, error = Menu.ExecuteCallbackSafely(item.onClick, item.value)
+                                                if not success and Menu.NotifyError then
+                                                    Menu.NotifyError(item.name or "Toggle", error)
+                                                elseif Menu.NotifySuccess then
+                                                    Menu.NotifySuccess(item.name or "Toggle", "Set to " .. tostring(item.value))
+                                                end
+                                            else
+                                                Menu.NotifyInteraction(item, "toggle", item.value)
                                             end
-                                            Menu.NotifyInteraction(item, "toggle", item.value)
                                             print("Toggled " .. (item.name or "option") .. " to " .. tostring(item.value))
                                         elseif item.type == "action" then
                                             if item.onClick then
-                                                item.onClick()
+                                                local success, error = Menu.ExecuteCallbackSafely(item.onClick)
+                                                if not success and Menu.NotifyError then
+                                                    Menu.NotifyError(item.name or "Action", error)
+                                                elseif Menu.NotifySuccess then
+                                                    Menu.NotifySuccess(item.name or "Action", "Executed successfully")
+                                                end
+                                            else
+                                                Menu.NotifyInteraction(item, "action")
                                             end
-                                            Menu.NotifyInteraction(item, "action")
                                             print("Executed action: " .. (item.name or "option"))
                                         end
                                     end
@@ -3115,13 +3127,29 @@ function Menu.HandleInput()
                                 elseif selectedItem.name == "Menu Size" then
                                     Menu.Scale = (selectedItem.value / 100.0) * (Menu.DefaultScaleMultiplier or 1.0)
                                 end
-                                if selectedItem.onClick then selectedItem.onClick(selectedItem.value) end
-                                Menu.NotifyInteraction(selectedItem, "slider", selectedItem.value)
+                                if selectedItem.onClick then
+                                    local success, error = Menu.ExecuteCallbackSafely(selectedItem.onClick, selectedItem.value)
+                                    if not success and Menu.NotifyError then
+                                        Menu.NotifyError(selectedItem.name or "Slider", error)
+                                    else
+                                        Menu.NotifyInteraction(selectedItem, "slider", selectedItem.value)
+                                    end
+                                else
+                                    Menu.NotifyInteraction(selectedItem, "slider", selectedItem.value)
+                                end
                             elseif selectedItem.type == "toggle" and selectedItem.hasSlider then
                                 local step = selectedItem.sliderStep or 0.1
                                 selectedItem.sliderValue = math.max(selectedItem.sliderMin or 0.0, (selectedItem.sliderValue or selectedItem.sliderMin or 0.0) - step)
-                                if selectedItem.onSliderChange then selectedItem.onSliderChange(selectedItem.sliderValue) end
-                                Menu.NotifyInteraction(selectedItem, "toggle_slider", selectedItem.sliderValue)
+                                if selectedItem.onSliderChange then
+                                    local success, error = Menu.ExecuteCallbackSafely(selectedItem.onSliderChange, selectedItem.sliderValue)
+                                    if not success and Menu.NotifyError then
+                                        Menu.NotifyError(selectedItem.name or "Slider", error)
+                                    else
+                                        Menu.NotifyInteraction(selectedItem, "toggle_slider", selectedItem.sliderValue)
+                                    end
+                                else
+                                    Menu.NotifyInteraction(selectedItem, "toggle_slider", selectedItem.sliderValue)
+                                end
                             elseif selectedItem.type == "toggle_selector" then
                                 local currentIndex = selectedItem.selected or 1
                                 if selectedItem.options and #selectedItem.options > 0 then
@@ -3199,13 +3227,29 @@ function Menu.HandleInput()
                                 elseif selectedItem.name == "Menu Size" then
                                     Menu.Scale = (selectedItem.value / 100.0) * (Menu.DefaultScaleMultiplier or 1.0)
                                 end
-                                if selectedItem.onClick then selectedItem.onClick(selectedItem.value) end
-                                Menu.NotifyInteraction(selectedItem, "slider", selectedItem.value)
+                                if selectedItem.onClick then
+                                    local success, error = Menu.ExecuteCallbackSafely(selectedItem.onClick, selectedItem.value)
+                                    if not success and Menu.NotifyError then
+                                        Menu.NotifyError(selectedItem.name or "Slider", error)
+                                    else
+                                        Menu.NotifyInteraction(selectedItem, "slider", selectedItem.value)
+                                    end
+                                else
+                                    Menu.NotifyInteraction(selectedItem, "slider", selectedItem.value)
+                                end
                             elseif selectedItem.type == "toggle" and selectedItem.hasSlider then
                                 local step = selectedItem.sliderStep or 0.1
                                 selectedItem.sliderValue = math.min(selectedItem.sliderMax or 100.0, (selectedItem.sliderValue or selectedItem.sliderMin or 0.0) + step)
-                                if selectedItem.onSliderChange then selectedItem.onSliderChange(selectedItem.sliderValue) end
-                                Menu.NotifyInteraction(selectedItem, "toggle_slider", selectedItem.sliderValue)
+                                if selectedItem.onSliderChange then
+                                    local success, error = Menu.ExecuteCallbackSafely(selectedItem.onSliderChange, selectedItem.sliderValue)
+                                    if not success and Menu.NotifyError then
+                                        Menu.NotifyError(selectedItem.name or "Slider", error)
+                                    else
+                                        Menu.NotifyInteraction(selectedItem, "toggle_slider", selectedItem.sliderValue)
+                                    end
+                                else
+                                    Menu.NotifyInteraction(selectedItem, "toggle_slider", selectedItem.sliderValue)
+                                end
                             elseif selectedItem.type == "toggle_selector" then
                                 local currentIndex = selectedItem.selected or 1
                                 if selectedItem.options and #selectedItem.options > 0 then
@@ -3292,13 +3336,25 @@ function Menu.HandleInput()
                             Menu.SelectedKeyName = Menu.SelectedKeyName
                             print("Changing menu keybind...")
                         end
-                        if item.onClick then item.onClick() end
-                        Menu.NotifyInteraction(item, "action")
+                        if item.onClick then
+                            local success, error = Menu.ExecuteCallbackSafely(item.onClick)
+                            if not success and Menu.NotifyError then
+                                Menu.NotifyError(item.name or "Action", error)
+                            else
+                                Menu.NotifyInteraction(item, "action")
+                            end
+                        else
+                            Menu.NotifyInteraction(item, "action")
+                        end
                     elseif item.type == "selector" then
                         if item.onClick then
                              local option = (item.options and item.options[item.selected]) or nil
-                             item.onClick(item.selected, option)
-                             Menu.NotifyInteraction(item, "selector", option)
+                             local success, error = Menu.ExecuteCallbackSafely(item.onClick, item.selected, option)
+                             if not success and Menu.NotifyError then
+                                Menu.NotifyError(item.name or "Selector", error)
+                             else
+                                Menu.NotifyInteraction(item, "selector", option)
+                             end
                         end
                     end
                 end
