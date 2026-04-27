@@ -43,6 +43,10 @@ Menu.BindingKey = nil
 Menu.BindingKeyName = nil
 
 Menu.ShowKeybinds = false
+Menu.ShowBlossoms = false
+Menu.ShowSpectatorList = false
+Menu.SpectatorEntries = {}
+Menu.SpectatorListAlpha = 0.0
 
 
 Menu.CurrentTopTab = 1
@@ -2141,29 +2145,234 @@ function Menu.DrawKeySelector(alpha)
     Menu.DrawText(math.floor(boxX + (boxWidth / 2) - (keyW / 2)), math.floor(boxY + (boxHeight / 2) - (keySize / 2)), keyName, keySize, 1.0, 1.0, 1.0, 1.0 * alpha)
 end
 
-function Menu.DrawKeybindsInterface(alpha)
-    if alpha <= 0 then
-        return
-    end
+local function clampNumber(value, minValue, maxValue)
+    if value < minValue then return minValue end
+    if value > maxValue then return maxValue end
+    return value
+end
 
+local function randomFloat(minValue, maxValue)
+    return minValue + ((math.random(0, 1000) / 1000) * (maxValue - minValue))
+end
+
+local function getOverlayScreenSize()
     local screenWidth = 1920
     local screenHeight = 1080
     if Susano and Susano.GetScreenWidth and Susano.GetScreenHeight then
         screenWidth = Susano.GetScreenWidth()
         screenHeight = Susano.GetScreenHeight()
+    elseif GetActiveScreenResolution then
+        screenWidth, screenHeight = GetActiveScreenResolution()
+    end
+    return screenWidth, screenHeight
+end
+
+local function getOverlayAccentColor()
+    local base = Menu.Colors.SelectedBg or { r = 148, g = 0, b = 211 }
+    return clampNumber(base.r / 255.0, 0.0, 1.0),
+        clampNumber(base.g / 255.0, 0.0, 1.0),
+        clampNumber(base.b / 255.0, 0.0, 1.0)
+end
+
+local function drawFilledCircle(x, y, radius, r, g, b, a)
+    if radius <= 0 then
+        return
     end
 
-    local activeBinds = {}
-    for _, cat in ipairs(Menu.Categories) do
+    if Susano and Susano.DrawCircle then
+        Susano.DrawCircle(x, y, radius, true, r, g, b, a, 1.0, 26)
+    else
+        Menu.DrawRoundedRect(x - radius, y - radius, radius * 2, radius * 2,
+            math.floor(r * 255), math.floor(g * 255), math.floor(b * 255), math.floor(a * 255), radius)
+    end
+end
+
+local function drawSoftGlow(x, y, radius, r, g, b, alpha)
+    for i = 3, 1, -1 do
+        local factor = i / 3
+        drawFilledCircle(x, y, radius * factor, r, g, b, alpha * factor * 0.36)
+    end
+end
+
+local function trimOverlayText(text, size, maxWidth)
+    local safeText = tostring(text or "")
+    if maxWidth <= 0 then
+        return ""
+    end
+
+    if Menu.GetTextWidth(safeText, size) <= maxWidth then
+        return safeText
+    end
+
+    local trimmed = safeText
+    while #trimmed > 0 do
+        trimmed = string.sub(trimmed, 1, #trimmed - 1)
+        local candidate = trimmed .. "..."
+        if Menu.GetTextWidth(candidate, size) <= maxWidth then
+            return candidate
+        end
+    end
+
+    return "..."
+end
+
+local function measureOverlayWidth(rows, rowSize, paddingX, gapWidth, minWidth)
+    local maxWidth = minWidth or 0
+    for _, row in ipairs(rows or {}) do
+        local leftWidth = Menu.GetTextWidth(tostring(row.leftText or ""), rowSize)
+        local rightWidth = 0
+        if row.rightText and row.rightText ~= "" then
+            rightWidth = math.max(44, Menu.GetTextWidth(tostring(row.rightText), rowSize - 1) + 18)
+        end
+        local totalWidth = (paddingX * 2) + leftWidth + rightWidth + gapWidth
+        if totalWidth > maxWidth then
+            maxWidth = totalWidth
+        end
+    end
+    return math.max(minWidth or 180, maxWidth)
+end
+
+function Menu.DrawOverlayPanel(title, rows, startX, startY, alpha, options)
+    if alpha <= 0 or not rows or #rows == 0 then
+        return 0, 0
+    end
+
+    options = options or {}
+
+    local paddingX = options.paddingX or 12
+    local paddingY = options.paddingY or 10
+    local titleSize = options.titleSize or 13
+    local rowSize = options.rowSize or 14
+    local rowHeight = options.rowHeight or 24
+    local headerHeight = options.headerHeight or 34
+    local cornerRadius = options.cornerRadius or 7
+    local minWidth = options.minWidth or 205
+    local width = options.width or measureOverlayWidth(rows, rowSize, paddingX, 18, minWidth)
+    local height = headerHeight + (#rows * rowHeight) + paddingY
+    local panelX = options.alignRight and (startX - width) or startX
+    local panelY = startY
+
+    local accentR, accentG, accentB = getOverlayAccentColor()
+    local bgAlpha = (options.backgroundAlpha or 0.84) * alpha
+
+    if Susano and Susano.DrawRectFilled then
+        Susano.DrawRectFilled(panelX + 4, panelY + 6, width, height, 0.0, 0.0, 0.0, 0.18 * alpha, cornerRadius)
+        Susano.DrawRectFilled(panelX, panelY, width, height, 0.02, 0.03, 0.05, bgAlpha, cornerRadius)
+    else
+        Menu.DrawRoundedRect(panelX + 4, panelY + 6, width, height, 0, 0, 0, math.floor(46 * alpha), cornerRadius)
+        Menu.DrawRoundedRect(panelX, panelY, width, height, 5, 7, 10, math.floor(bgAlpha * 255), cornerRadius)
+    end
+
+    if Susano and Susano.DrawRectGradient then
+        Susano.DrawRectGradient(panelX, panelY, width, 3,
+            accentR * 0.45, accentG * 0.45, accentB * 0.45, 0.65 * alpha,
+            accentR, accentG, accentB, 1.0 * alpha,
+            accentR, accentG, accentB, 1.0 * alpha,
+            accentR * 0.35, accentG * 0.35, accentB * 0.35, 0.65 * alpha,
+            cornerRadius)
+    elseif Susano and Susano.DrawRectFilled then
+        Susano.DrawRectFilled(panelX, panelY, width, 3, accentR, accentG, accentB, 1.0 * alpha, 0)
+    else
+        Menu.DrawRect(panelX, panelY, width, 3, math.floor(accentR * 255), math.floor(accentG * 255), math.floor(accentB * 255), math.floor(255 * alpha))
+    end
+
+    if Susano and Susano.DrawRect then
+        Susano.DrawRect(panelX, panelY, width, height, accentR * 0.45, accentG * 0.45, accentB * 0.45, 0.60 * alpha, 1.0)
+    else
+        Menu.DrawRoundedRect(panelX, panelY, width, height,
+            math.floor(accentR * 115), math.floor(accentG * 115), math.floor(accentB * 115), math.floor(90 * alpha), cornerRadius)
+    end
+
+    Menu.DrawTextEmphasis(panelX + paddingX, panelY + 10, string.upper(tostring(title or "")), titleSize, 1.0, 1.0, 1.0, 0.96 * alpha)
+
+    for i, row in ipairs(rows) do
+        local rowTop = panelY + headerHeight + ((i - 1) * rowHeight)
+        local rowCenterY = rowTop + (rowHeight / 2)
+        local rowAlpha = clampNumber((row.alpha or 1.0) * alpha, 0.0, 1.0)
+        local barAlpha = (row.active and 0.95 or 0.38) * alpha
+
+        if i > 1 then
+            if Susano and Susano.DrawRectFilled then
+                Susano.DrawRectFilled(panelX + paddingX, rowTop, width - (paddingX * 2), 1, 1.0, 1.0, 1.0, 0.06 * alpha, 0)
+            else
+                Menu.DrawRect(panelX + paddingX, rowTop, width - (paddingX * 2), 1, 255, 255, 255, math.floor(15 * alpha))
+            end
+        end
+
+        if row.bar ~= false then
+            local rowR, rowG, rowB = accentR, accentG, accentB
+            if row.barColor then
+                rowR, rowG, rowB = row.barColor.r, row.barColor.g, row.barColor.b
+            end
+
+            if Susano and Susano.DrawRectFilled then
+                Susano.DrawRectFilled(panelX + 6, rowTop + 5, 2, rowHeight - 9, rowR, rowG, rowB, barAlpha, 2)
+            else
+                Menu.DrawRect(panelX + 6, rowTop + 5, 2, rowHeight - 9, math.floor(rowR * 255), math.floor(rowG * 255), math.floor(rowB * 255), math.floor(barAlpha * 255))
+            end
+        end
+
+        local rightBadgeWidth = 0
+        local rightText = row.rightText and tostring(row.rightText) or ""
+        if rightText ~= "" then
+            rightText = trimOverlayText(rightText, rowSize - 1, 120)
+            local rightTextWidth = Menu.GetTextWidth(rightText, rowSize - 1)
+            rightBadgeWidth = math.max(44, rightTextWidth + 18)
+            local badgeX = panelX + width - paddingX - rightBadgeWidth
+            local badgeY = rowCenterY - 9
+
+            local badgeR = row.active and accentR * 0.55 or 0.09
+            local badgeG = row.active and accentG * 0.55 or 0.10
+            local badgeB = row.active and accentB * 0.55 or 0.12
+            local badgeAlpha = row.active and 0.82 * alpha or 0.62 * alpha
+
+            if Susano and Susano.DrawRectFilled then
+                Susano.DrawRectFilled(badgeX, badgeY, rightBadgeWidth, 18, badgeR, badgeG, badgeB, badgeAlpha, 5)
+            else
+                Menu.DrawRoundedRect(badgeX, badgeY, rightBadgeWidth, 18,
+                    math.floor(badgeR * 255), math.floor(badgeG * 255), math.floor(badgeB * 255), math.floor(badgeAlpha * 255), 5)
+            end
+
+            local badgeTextWidth = Menu.GetTextWidth(rightText, rowSize - 1)
+            local badgeTextX = badgeX + (rightBadgeWidth / 2) - (badgeTextWidth / 2)
+            local badgeTextY = rowCenterY - ((rowSize - 1) / 2)
+            Menu.DrawText(badgeTextX, badgeTextY, rightText, rowSize - 1, 1.0, 1.0, 1.0, rowAlpha)
+        end
+
+        local labelX = panelX + paddingX + 2
+        local labelMaxWidth = width - (paddingX * 2) - rightBadgeWidth - (rightBadgeWidth > 0 and 14 or 0)
+        local labelText = trimOverlayText(row.leftText or "", rowSize, labelMaxWidth)
+        local labelY = rowCenterY - (rowSize / 2)
+        Menu.DrawTextEmphasis(labelX, labelY, labelText, rowSize, 1.0, 1.0, 1.0, rowAlpha)
+    end
+
+    return width, height
+end
+
+local function buildKeybindRows()
+    local rows = {}
+    local menuKeyCode = Menu.SelectedKey or 0x31
+    local menuKeyName = Menu.SelectedKeyName or Menu.GetKeyName(menuKeyCode)
+
+    table.insert(rows, {
+        leftText = "Toggle Menu",
+        rightText = menuKeyName,
+        active = Menu.Visible,
+        priority = -1
+    })
+
+    for _, cat in ipairs(Menu.Categories or {}) do
         if cat.hasTabs and cat.tabs then
             for _, tab in ipairs(cat.tabs) do
                 if tab.items then
                     for _, item in ipairs(tab.items) do
                         if item.bindKey and item.bindKeyName and (item.type == "toggle" or item.type == "action") then
-                            table.insert(activeBinds, {
-                                name = item.name,
-                                keyName = item.bindKeyName,
-                                isActive = (item.type == "toggle" and (item.value or false)) or nil
+                            table.insert(rows, {
+                                leftText = item.name,
+                                rightText = item.bindKeyName,
+                                active = item.type == "toggle" and (item.value or false) or false,
+                                alpha = item.type == "toggle" and ((item.value and 1.0) or 0.80) or 0.94,
+                                priority = item.type == "toggle" and ((item.value and 0) or 2) or 1
                             })
                         end
                     end
@@ -2172,82 +2381,195 @@ function Menu.DrawKeybindsInterface(alpha)
         end
     end
 
-    if #activeBinds == 0 then
-        return
+    table.sort(rows, function(a, b)
+        if (a.priority or 0) ~= (b.priority or 0) then
+            return (a.priority or 0) < (b.priority or 0)
+        end
+        return string.lower(tostring(a.leftText or "")) < string.lower(tostring(b.leftText or ""))
+    end)
+
+    return rows
+end
+
+function Menu.DrawKeybindsInterface(alpha, startY)
+    if alpha <= 0 then
+        return 0, 0
     end
 
-    local padding = 15
-    local cornerRadius = 8
-    local barHeight = 2
-    local lineHeight = 25
-    local textSize = 14
-    local headerHeight = 40
-    
-    local maxWidth = 0
-    for _, bind in ipairs(activeBinds) do
-        local status = bind.isActive and "on" or "off"
-        local text = bind.name .. " (" .. bind.keyName .. ") [" .. status .. "]"
-        local textWidth = Menu.GetTextWidth(text, textSize)
-        if textWidth > maxWidth then
-            maxWidth = textWidth
+    local rows = buildKeybindRows()
+    local screenWidth = getOverlayScreenSize()
+    return Menu.DrawOverlayPanel("Keybinds", rows, screenWidth - 20, startY or 20, alpha, {
+        alignRight = true,
+        minWidth = 230
+    })
+end
+
+function Menu.DrawSpectatorList(alpha, startY)
+    if alpha <= 0 then
+        return 0, 0
+    end
+
+    local rows = {}
+    if Menu.SpectatorEntries and #Menu.SpectatorEntries > 0 then
+        for _, entry in ipairs(Menu.SpectatorEntries) do
+            table.insert(rows, {
+                leftText = entry.name or "Unknown spectator",
+                active = true,
+                alpha = 0.96
+            })
+        end
+    else
+        table.insert(rows, {
+            leftText = "No spectators",
+            active = false,
+            alpha = 0.72,
+            bar = false
+        })
+    end
+
+    local screenWidth = getOverlayScreenSize()
+    return Menu.DrawOverlayPanel("Spectators", rows, screenWidth - 20, startY or 20, alpha, {
+        alignRight = true,
+        minWidth = 210
+    })
+end
+
+Menu.Particles = Menu.Particles or {}
+Menu.BlossomParticles = Menu.BlossomParticles or {}
+
+local function resetSnowParticle(particle, spawnAbove)
+    particle.x = randomFloat(0.02, 0.98)
+    particle.y = spawnAbove and randomFloat(-0.25, -0.03) or randomFloat(0.0, 1.0)
+    particle.speedY = randomFloat(0.0010, 0.0036)
+    particle.speedX = randomFloat(-0.0007, 0.0007)
+    particle.size = randomFloat(1.2, 3.2)
+    particle.phase = randomFloat(0.0, math.pi * 2)
+    particle.drift = randomFloat(0.0003, 0.0012)
+    particle.sparkle = randomFloat(1.2, 2.6)
+end
+
+local function resetBlossomParticle(particle, spawnAbove)
+    local palette = {
+        { r = 1.0, g = 0.74, b = 0.86 },
+        { r = 1.0, g = 0.82, b = 0.90 },
+        { r = 1.0, g = 0.64, b = 0.78 }
+    }
+    local tone = palette[math.random(1, #palette)]
+
+    particle.x = randomFloat(0.04, 0.96)
+    particle.y = spawnAbove and randomFloat(-0.22, -0.04) or randomFloat(0.0, 1.0)
+    particle.lastX = particle.x
+    particle.lastY = particle.y
+    particle.speedY = randomFloat(0.0008, 0.0020)
+    particle.speedX = randomFloat(-0.0003, 0.0003)
+    particle.sway = randomFloat(0.0010, 0.0024)
+    particle.phase = randomFloat(0.0, math.pi * 2)
+    particle.width = randomFloat(4.0, 7.4)
+    particle.height = randomFloat(2.2, 3.8)
+    particle.alpha = randomFloat(0.36, 0.72)
+    particle.r = tone.r
+    particle.g = tone.g
+    particle.b = tone.b
+end
+
+local function ensureAmbientParticles()
+    if #Menu.Particles == 0 then
+        for i = 1, 56 do
+            local particle = {}
+            resetSnowParticle(particle, false)
+            table.insert(Menu.Particles, particle)
         end
     end
-    
-    local width = math.max(200, maxWidth + (padding * 2))
-    local startX = screenWidth - width - 20
-    local startY = 20
 
-    local contentHeight = #activeBinds * lineHeight
-    local totalHeight = headerHeight + barHeight + padding + contentHeight + padding
-
-    local menuR = (Menu.Colors.SelectedBg and Menu.Colors.SelectedBg.r) and (Menu.Colors.SelectedBg.r / 255.0) or 0.4
-    local menuG = (Menu.Colors.SelectedBg and Menu.Colors.SelectedBg.g) and (Menu.Colors.SelectedBg.g / 255.0) or 0.2
-    local menuB = (Menu.Colors.SelectedBg and Menu.Colors.SelectedBg.b) and (Menu.Colors.SelectedBg.b / 255.0) or 0.8
-
-    local bgAlpha = 0.6 * alpha
-    if Susano and Susano.DrawRectFilled then
-        Susano.DrawRectFilled(startX, startY, width, totalHeight, 0.0, 0.0, 0.0, bgAlpha, cornerRadius)
-    else
-        Menu.DrawRoundedRect(startX, startY, width, totalHeight, 0, 0, 0, math.floor(255 * bgAlpha), cornerRadius)
-    end
-
-    local textX = startX + padding
-    local textY = startY + padding
-    Menu.DrawTextEmphasis(textX, textY, "keybind", textSize, 1.0, 1.0, 1.0, 1.0 * alpha)
-
-    local barY = startY + headerHeight
-    if Susano and Susano.DrawRectFilled then
-        Susano.DrawRectFilled(startX + padding, barY, width - 2 * padding, barHeight, menuR, menuG, menuB, 1.0 * alpha, 0)
-    else
-        Menu.DrawRect(startX + padding, barY, width - 2 * padding, barHeight, math.floor(menuR * 255), math.floor(menuG * 255), math.floor(menuB * 255), math.floor(255 * alpha))
-    end
-
-    local currentY = barY + barHeight + padding
-    for i, bind in ipairs(activeBinds) do
-        local text
-        if bind.isActive ~= nil then
-            local status = bind.isActive and "on" or "off"
-            text = bind.name .. " (" .. bind.keyName .. ") [" .. status .. "]"
-        else
-            text = bind.name .. " (" .. bind.keyName .. ")"
+    if #Menu.BlossomParticles == 0 then
+        for i = 1, 28 do
+            local particle = {}
+            resetBlossomParticle(particle, false)
+            table.insert(Menu.BlossomParticles, particle)
         end
-        local bindTextX = startX + padding
-        local bindTextY = currentY + (i - 1) * lineHeight
-
-        Menu.DrawTextEmphasis(bindTextX, bindTextY, text, textSize, 1.0, 1.0, 1.0, 1.0 * alpha)
     end
 end
 
-Menu.Particles = {}
-for i = 1, 80 do
-    table.insert(Menu.Particles, {
-        x = math.random(0, 100) / 100,
-        y = math.random(0, 100) / 100,
-        speedY = math.random(20, 100) / 10000,
-        speedX = math.random(-20, 20) / 10000,
-        size = math.random(1, 2),
-        life = math.random(10, 50)
-    })
+local function isParticleVisible(particleY, segments)
+    for i, seg in ipairs(segments or {}) do
+        if i == #segments then
+            break
+        end
+        if particleY >= seg.y and particleY <= (seg.y + seg.h) then
+            return true
+        end
+    end
+    return false
+end
+
+local function drawSnowflakes(x, y, width, fullHeight, segments, dtScale, timeNow)
+    local accentR, accentG, accentB = getOverlayAccentColor()
+    local snowR = clampNumber(0.84 + (accentR * 0.10), 0.0, 1.0)
+    local snowG = clampNumber(0.87 + (accentG * 0.10), 0.0, 1.0)
+    local snowB = 1.0
+
+    drawSoftGlow(x + (width * 0.78), y + 28, math.max(40, width * 0.16), accentR, accentG, accentB, 0.18)
+    drawSoftGlow(x + (width * 0.20), y + fullHeight - 22, math.max(34, width * 0.12), 0.75, 0.88, 1.0, 0.14)
+
+    for _, particle in ipairs(Menu.Particles) do
+        particle.y = particle.y + (particle.speedY * dtScale)
+        particle.x = particle.x + (math.sin((timeNow * particle.sparkle) + particle.phase) * particle.drift * dtScale) + (particle.speedX * dtScale)
+
+        if particle.y > 1.06 or particle.x < -0.12 or particle.x > 1.12 then
+            resetSnowParticle(particle, true)
+        end
+
+        local drawX = x + (particle.x * width)
+        local drawY = y + (particle.y * fullHeight)
+        if isParticleVisible(drawY, segments) then
+            local alpha = clampNumber(0.28 + ((math.sin((timeNow * particle.sparkle) + particle.phase) + 1.0) * 0.20), 0.18, 0.82)
+            drawFilledCircle(drawX, drawY, particle.size, snowR, snowG, snowB, alpha)
+
+            if particle.size > 2.3 and Susano and Susano.DrawLine then
+                Susano.DrawLine(drawX - particle.size, drawY, drawX + particle.size, drawY, snowR, snowG, snowB, alpha * 0.25, 1.0)
+                Susano.DrawLine(drawX, drawY - particle.size, drawX, drawY + particle.size, snowR, snowG, snowB, alpha * 0.25, 1.0)
+            end
+        end
+    end
+end
+
+local function drawBlossoms(x, y, width, fullHeight, segments, dtScale, timeNow)
+    drawSoftGlow(x + (width * 0.26), y + 22, math.max(42, width * 0.15), 1.0, 0.62, 0.82, 0.16)
+    drawSoftGlow(x + (width * 0.74), y + fullHeight - 18, math.max(36, width * 0.12), 1.0, 0.76, 0.88, 0.12)
+
+    for _, particle in ipairs(Menu.BlossomParticles) do
+        particle.lastX = particle.x
+        particle.lastY = particle.y
+        particle.y = particle.y + (particle.speedY * dtScale)
+        particle.x = particle.x + (math.sin((timeNow * 1.55) + particle.phase) * particle.sway * dtScale) + (particle.speedX * dtScale)
+
+        if particle.y > 1.08 or particle.x < -0.15 or particle.x > 1.15 then
+            resetBlossomParticle(particle, true)
+        end
+
+        local drawX = x + (particle.x * width)
+        local drawY = y + (particle.y * fullHeight)
+        if isParticleVisible(drawY, segments) then
+            local alpha = clampNumber(particle.alpha + (math.sin((timeNow * 1.25) + particle.phase) * 0.08), 0.22, 0.82)
+            local lastX = x + (particle.lastX * width)
+            local lastY = y + (particle.lastY * fullHeight)
+
+            if Susano and Susano.DrawLine then
+                Susano.DrawLine(lastX, lastY, drawX, drawY, particle.r, particle.g, particle.b, alpha * 0.10, 1.0)
+            end
+
+            if Susano and Susano.DrawRectFilled then
+                Susano.DrawRectFilled(drawX - (particle.width / 2), drawY - (particle.height / 2),
+                    particle.width, particle.height, particle.r, particle.g, particle.b, alpha, particle.height / 2)
+                Susano.DrawRectFilled(drawX - (particle.width * 0.15), drawY - (particle.height * 0.48),
+                    particle.width * 0.38, particle.height * 0.40, 1.0, 1.0, 1.0, alpha * 0.34, particle.height / 3)
+            else
+                Menu.DrawRoundedRect(drawX - (particle.width / 2), drawY - (particle.height / 2),
+                    particle.width, particle.height,
+                    math.floor(particle.r * 255), math.floor(particle.g * 255), math.floor(particle.b * 255), math.floor(alpha * 255), particle.height / 2)
+            end
+        end
+    end
 end
 
 function Menu.GetLayoutSegments()
@@ -2469,40 +2791,18 @@ function Menu.DrawBackground()
         end
     end
 
-    if Menu.ShowSnowflakes then
-        for _, p in ipairs(Menu.Particles) do
-            p.y = p.y + p.speedY
-            p.x = p.x + p.speedX
+    if Menu.ShowSnowflakes or Menu.ShowBlossoms then
+        ensureAmbientParticles()
 
-            if p.y > 1.0 then
-                p.y = 0
-                p.x = math.random(0, 100) / 100
-                p.speedY = math.random(20, 100) / 10000
-                p.speedX = math.random(-20, 20) / 10000
-            end
+        local dtScale = clampNumber(((GetFrameTime and GetFrameTime() or 0.016) * 60.0), 0.55, 1.85)
+        local timeNow = (GetGameTimer and (GetGameTimer() / 1000.0)) or 0.0
 
-            local pX = x + (p.x * width)
-            local pY = y + (p.y * fullHeight)
-            
-            local isVisible = false
-            for i, seg in ipairs(segments) do
-                if i == #segments then
-                    break
-                end
-                if pY >= seg.y and pY <= seg.y + seg.h then
-                    isVisible = true
-                    break
-                end
-            end
-            
-            if isVisible then
-                 local alpha = math.random(100, 200)
-                 if Susano and Susano.DrawRectFilled then
-                    Susano.DrawRectFilled(pX, pY, p.size, p.size, 1.0, 1.0, 1.0, alpha/255, 0)
-                else
-                    Menu.DrawRect(pX, pY, p.size, p.size, 255, 255, 255, alpha)
-                end
-            end
+        if Menu.ShowSnowflakes then
+            drawSnowflakes(x, y, width, fullHeight, segments, dtScale, timeNow)
+        end
+
+        if Menu.ShowBlossoms then
+            drawBlossoms(x, y, width, fullHeight, segments, dtScale, timeNow)
         end
     end
 end
@@ -2541,10 +2841,22 @@ function Menu.Render()
         Menu.KeybindsInterfaceAlpha = math.max(0.0, Menu.KeybindsInterfaceAlpha - animSpeed)
     end
 
+    if Menu.ShowSpectatorList then
+        Menu.SpectatorListAlpha = math.min(1.0, Menu.SpectatorListAlpha + animSpeed)
+    else
+        Menu.SpectatorListAlpha = math.max(0.0, Menu.SpectatorListAlpha - animSpeed)
+    end
+
     Susano.BeginFrame()
 
+    local overlayStackY = 20
     if Menu.KeybindsInterfaceAlpha > 0 then
-        Menu.DrawKeybindsInterface(Menu.KeybindsInterfaceAlpha)
+        local _, keybindHeight = Menu.DrawKeybindsInterface(Menu.KeybindsInterfaceAlpha, overlayStackY)
+        overlayStackY = overlayStackY + keybindHeight + 10
+    end
+
+    if Menu.SpectatorListAlpha > 0 then
+        Menu.DrawSpectatorList(Menu.SpectatorListAlpha, overlayStackY)
     end
 
     Menu.BlockGameplayInput()
@@ -2588,7 +2900,7 @@ function Menu.Render()
         Susano.SubmitFrame()
     end
 
-    if not Menu.Visible and not Menu.ShowKeybinds and Menu.LoadingBarAlpha <= 0 and Menu.KeySelectorAlpha <= 0 and not Menu.HasNotifications() then
+    if not Menu.Visible and not Menu.ShowKeybinds and not Menu.ShowSpectatorList and Menu.LoadingBarAlpha <= 0 and Menu.KeySelectorAlpha <= 0 and Menu.SpectatorListAlpha <= 0 and not Menu.HasNotifications() then
         if Susano.ResetFrame then
             Susano.ResetFrame()
         end
@@ -2715,6 +3027,24 @@ function Menu.CaptureBindableKey()
     return nil
 end
 
+function Menu.ApplySpecialToggleState(item)
+    if not item or (item.type ~= "toggle" and item.type ~= "toggle_selector") then
+        return
+    end
+
+    if item.name == "Show Menu Keybinds" then
+        Menu.ShowKeybinds = item.value == true
+    elseif item.name == "Editor Mode" then
+        Menu.EditorMode = item.value == true
+    elseif item.name == "Flakes" then
+        Menu.ShowSnowflakes = item.value == true
+    elseif item.name == "Blossoms" then
+        Menu.ShowBlossoms = item.value == true
+    elseif item.name == "Show Spectator List" then
+        Menu.ShowSpectatorList = item.value == true
+    end
+end
+
 function Menu.HandleInput()
     if Menu.IsLoading or not Menu.LoadingComplete then
         return
@@ -2794,9 +3124,7 @@ function Menu.HandleInput()
                                     if (pressed == true) or (down == true and not wasDown) then
                                         if item.type == "toggle" then
                                             item.value = not item.value
-                                            if item.name == "Editor Mode" then
-                                                Menu.EditorMode = item.value
-                                            end
+                                            Menu.ApplySpecialToggleState(item)
                                             if item.onClick then
                                                 local success, error = Menu.ExecuteCallbackSafely(item.onClick, item.value)
                                                 if not success and Menu.NotifyError then
@@ -2854,7 +3182,7 @@ function Menu.HandleInput()
             local wasVisible = Menu.Visible
             Menu.Visible = not Menu.Visible
 
-            if wasVisible and not Menu.Visible and not Menu.ShowKeybinds then
+            if wasVisible and not Menu.Visible and not Menu.ShowKeybinds and not Menu.ShowSpectatorList then
                 if Susano and Susano.ResetFrame then
                     Susano.ResetFrame()
                 end
@@ -3320,13 +3648,7 @@ function Menu.HandleInput()
                 if item and not item.isSeparator then
                     if item.type == "toggle" or item.type == "toggle_selector" then
                         item.value = not item.value
-                        if item.name == "Show Menu Keybinds" then
-                            Menu.ShowKeybinds = item.value
-                        elseif item.name == "Editor Mode" then
-                            Menu.EditorMode = item.value
-                        elseif item.name == "Flocon" then
-                            Menu.ShowSnowflakes = item.value
-                        end
+                        Menu.ApplySpecialToggleState(item)
                         if item.onClick then item.onClick(item.value) end
                         Menu.NotifyInteraction(item, "toggle", item.value)
                     elseif item.type == "action" then
