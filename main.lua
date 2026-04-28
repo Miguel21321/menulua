@@ -47,6 +47,12 @@ Menu.ShowBlossoms = false
 Menu.ShowSpectatorList = false
 Menu.SpectatorEntries = {}
 Menu.SpectatorListAlpha = 0.0
+Menu.KeybindsPanelOffsetX = 0
+Menu.KeybindsPanelOffsetY = 0
+Menu.SpectatorPanelOffsetX = 0
+Menu.SpectatorPanelOffsetY = 0
+Menu.KeybindsPositionMode = false
+Menu.SpectatorPositionMode = false
 
 
 Menu.CurrentTopTab = 1
@@ -2251,6 +2257,11 @@ function Menu.DrawOverlayPanel(title, rows, startX, startY, alpha, options)
     local height = headerHeight + (#rows * rowHeight) + paddingY
     local panelX = options.alignRight and (startX - width) or startX
     local panelY = startY
+    if options.clampToScreen then
+        local screenWidth, screenHeight = getOverlayScreenSize()
+        panelX = clampNumber(panelX, 8, math.max(8, screenWidth - width - 8))
+        panelY = clampNumber(panelY, 8, math.max(8, screenHeight - height - 8))
+    end
 
     local accentR, accentG, accentB = getOverlayAccentColor()
     local bgAlpha = (options.backgroundAlpha or 0.84) * alpha
@@ -2398,9 +2409,12 @@ function Menu.DrawKeybindsInterface(alpha, startY)
 
     local rows = buildKeybindRows()
     local screenWidth = getOverlayScreenSize()
-    return Menu.DrawOverlayPanel("Keybinds", rows, screenWidth - 20, startY or 20, alpha, {
+    local panelX = (screenWidth - 20) + (tonumber(Menu.KeybindsPanelOffsetX) or 0)
+    local panelY = (startY or 20) + (tonumber(Menu.KeybindsPanelOffsetY) or 0)
+    return Menu.DrawOverlayPanel("Keybinds", rows, panelX, panelY, alpha, {
         alignRight = true,
-        minWidth = 230
+        minWidth = 230,
+        clampToScreen = true
     })
 end
 
@@ -2414,13 +2428,15 @@ function Menu.DrawSpectatorList(alpha, startY)
         for _, entry in ipairs(Menu.SpectatorEntries) do
             table.insert(rows, {
                 leftText = entry.name or "Unknown spectator",
-                active = true,
-                alpha = 0.96
+                rightText = entry.rightText or "",
+                active = entry.active ~= false,
+                alpha = entry.alpha or 0.96,
+                barColor = entry.barColor
             })
         end
     else
         table.insert(rows, {
-            leftText = "No spectators",
+            leftText = "No suspicious players",
             active = false,
             alpha = 0.72,
             bar = false
@@ -2428,9 +2444,12 @@ function Menu.DrawSpectatorList(alpha, startY)
     end
 
     local screenWidth = getOverlayScreenSize()
-    return Menu.DrawOverlayPanel("Spectators", rows, screenWidth - 20, startY or 20, alpha, {
+    local panelX = (screenWidth - 20) + (tonumber(Menu.SpectatorPanelOffsetX) or 0)
+    local panelY = (startY or 20) + (tonumber(Menu.SpectatorPanelOffsetY) or 0)
+    return Menu.DrawOverlayPanel("Spectators", rows, panelX, panelY, alpha, {
         alignRight = true,
-        minWidth = 210
+        minWidth = 210,
+        clampToScreen = true
     })
 end
 
