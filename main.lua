@@ -2914,6 +2914,8 @@ function Menu.Render()
         end
     end
 
+    DrawClickableCursor()
+
     if Menu.HasNotifications() then
         Menu.DrawNotifications()
     end
@@ -3094,12 +3096,45 @@ local function GetOverlayMouseState()
         end
     end
 
+    local screenW, screenH = MenuGetScreenSize()
+    if mouseX and mouseY and screenW and screenH and mouseX >= 0 and mouseY >= 0 and mouseX <= 1.5 and mouseY <= 1.5 then
+        mouseX = mouseX * screenW
+        mouseY = mouseY * screenH
+    end
+
     local leftDown, leftPressed = Susano.GetAsyncKeyState(0x01)
     local rightDown, rightPressed = Susano.GetAsyncKeyState(0x02)
 
     return mouseX, mouseY,
         (leftDown == true or leftDown == 1), leftPressed == true,
         (rightDown == true or rightDown == 1), rightPressed == true
+end
+
+local function DrawClickableCursor()
+    if not Menu.Visible or not Menu.ClickableMenu or not Susano or not Susano.GetCursorPos then
+        return
+    end
+
+    local mouseX, mouseY = GetOverlayMouseState()
+    if not mouseX or not mouseY then
+        return
+    end
+
+    local outer = 11
+    local inner = 7
+    local dot = 3
+
+    if Susano.DrawCircle then
+        Susano.DrawCircle(mouseX, mouseY, outer, false, 0.0, 0.0, 0.0, 0.95, 2.0, 26)
+        Susano.DrawCircle(mouseX, mouseY, inner, false, 1.0, 1.0, 1.0, 1.0, 1.0, 24)
+        Susano.DrawCircle(mouseX, mouseY, dot, true, 1.0, 0.25, 0.25, 1.0, 1.0, 18)
+    elseif Susano.DrawRectFilled then
+        Susano.DrawRectFilled(mouseX - 6, mouseY - 1, 12, 2, 0.0, 0.0, 0.0, 1.0, 1)
+        Susano.DrawRectFilled(mouseX - 1, mouseY - 6, 2, 12, 0.0, 0.0, 0.0, 1.0, 1)
+        Susano.DrawRectFilled(mouseX - 5, mouseY, 10, 1, 1.0, 1.0, 1.0, 1.0, 0)
+        Susano.DrawRectFilled(mouseX, mouseY - 5, 1, 10, 1.0, 1.0, 1.0, 1.0, 0)
+        Susano.DrawRectFilled(mouseX - 1, mouseY - 1, 2, 2, 1.0, 0.25, 0.25, 1.0, 1)
+    end
 end
 
 local function IsWardrobeSelectorItem(item)
@@ -3730,21 +3765,9 @@ function Menu.HandleInput()
         end
 
         if Susano and Susano.GetCursorPos and Susano.GetAsyncKeyState then
-            local cursorPos = Susano.GetCursorPos()
-            local mouseX = 0
-            local mouseY = 0
-            
-            if cursorPos then
-                if type(cursorPos) == "table" then
-                    mouseX = cursorPos[1] or cursorPos.x or 0
-                    mouseY = cursorPos[2] or cursorPos.y or 0
-                else
-                    local xOk, x = pcall(function() return cursorPos.x end)
-                    local yOk, y = pcall(function() return cursorPos.y end)
-                    if xOk and x then mouseX = x end
-                    if yOk and y then mouseY = y end
-                end
-            end
+            local mouseX, mouseY = GetOverlayMouseState()
+            mouseX = mouseX or 0
+            mouseY = mouseY or 0
             
             local leftMouseDown = false
             if Susano.GetAsyncKeyState then
