@@ -2870,6 +2870,11 @@ function Menu.Render()
         Menu.SpectatorListAlpha = math.max(0.0, Menu.SpectatorListAlpha - animSpeed)
     end
 
+    local useInteractiveOverlay = (Menu.Visible and Menu.ClickableMenu) or Menu.EditorMode
+    if Susano and Susano.EnableOverlay then
+        Susano.EnableOverlay(useInteractiveOverlay == true)
+    end
+
     Susano.BeginFrame()
 
     local overlayStackY = 20
@@ -2883,11 +2888,6 @@ function Menu.Render()
     end
 
     Menu.BlockGameplayInput()
-
-    local useInteractiveOverlay = (Menu.Visible and Menu.ClickableMenu) or Menu.EditorMode
-    if Susano and Susano.EnableOverlay then
-        Susano.EnableOverlay(useInteractiveOverlay == true)
-    end
 
     if Menu.Visible then
         Menu.DrawBackground()
