@@ -47,6 +47,10 @@ Menu.ShowBlossoms = false
 Menu.ShowSpectatorList = false
 Menu.SpectatorEntries = {}
 Menu.SpectatorListAlpha = 0.0
+Menu.ClickableMenu = false
+Menu.MouseLeftWasDown = false
+Menu.MouseRightWasDown = false
+Menu.ActiveMouseSlider = nil
 Menu.KeybindsPanelOffsetX = 0
 Menu.KeybindsPanelOffsetY = 0
 Menu.SpectatorPanelOffsetX = 0
@@ -2880,13 +2884,12 @@ function Menu.Render()
 
     Menu.BlockGameplayInput()
 
+    local useInteractiveOverlay = (Menu.Visible and Menu.ClickableMenu) or Menu.EditorMode
+    if Susano and Susano.EnableOverlay then
+        Susano.EnableOverlay(useInteractiveOverlay == true)
+    end
+
     if Menu.Visible then
-        if Menu.EditorMode and Susano and Susano.EnableOverlay then
-            Susano.EnableOverlay(true)
-        elseif not Menu.EditorMode and Susano and Susano.EnableOverlay then
-            Susano.EnableOverlay(false)
-        end
-        
         Menu.DrawBackground()
         Menu.DrawHeader()
         Menu.DrawCategories()
@@ -3053,6 +3056,8 @@ function Menu.ApplySpecialToggleState(item)
 
     if item.name == "Show Menu Keybinds" then
         Menu.ShowKeybinds = item.value == true
+    elseif item.name == "Clickable Menu" then
+        Menu.ClickableMenu = item.value == true
     elseif item.name == "Editor Mode" then
         Menu.EditorMode = item.value == true
     elseif item.name == "Flakes" then
@@ -3062,6 +3067,508 @@ function Menu.ApplySpecialToggleState(item)
     elseif item.name == "Show Spectator List" then
         Menu.ShowSpectatorList = item.value == true
     end
+end
+
+local function IsPointInRect(px, py, x, y, width, height)
+    return px >= x and px <= (x + width) and py >= y and py <= (y + height)
+end
+
+local function GetOverlayMouseState()
+    if not (Susano and Susano.GetCursorPos and Susano.GetAsyncKeyState) then
+        return nil
+    end
+
+    local cursorPos = Susano.GetCursorPos()
+    local mouseX = 0
+    local mouseY = 0
+
+    if cursorPos then
+        if type(cursorPos) == "table" then
+            mouseX = cursorPos[1] or cursorPos.x or 0
+            mouseY = cursorPos[2] or cursorPos.y or 0
+        else
+            local xOk, x = pcall(function() return cursorPos.x end)
+            local yOk, y = pcall(function() return cursorPos.y end)
+            if xOk and x then mouseX = x end
+            if yOk and y then mouseY = y end
+        end
+    end
+
+    local leftDown, leftPressed = Susano.GetAsyncKeyState(0x01)
+    local rightDown, rightPressed = Susano.GetAsyncKeyState(0x02)
+
+    return mouseX, mouseY,
+        (leftDown == true or leftDown == 1), leftPressed == true,
+        (rightDown == true or rightDown == 1), rightPressed == true
+end
+
+local function IsWardrobeSelectorItem(item)
+    if not item then
+        return false
+    end
+
+    local wardrobeItemNames = {
+        Hat = true,
+        Mask = true,
+        Glasses = true,
+        Torso = true,
+        Tshirt = true,
+        Pants = true,
+        Shoes = true
+    }
+
+    return wardrobeItemNames[item.name] == true
+end
+
+local function ApplySelectorSpecialCases(item, currentIndex)
+    if not item then
+        return
+    end
+
+    if item.name == "Menu Theme" and item.options then
+        local theme = item.options[currentIndex]
+        Menu.ApplyTheme(theme)
+    elseif item.name == "Gradient" and item.options then
+        local gradientVal = item.options[currentIndex]
+        Menu.GradientType = tonumber(gradientVal) or 1
+    elseif item.name == "Scroll Bar Position" and item.options then
+        local pos = item.options[currentIndex]
+        if pos == "Left" then
+            Menu.ScrollbarPosition = 1
+        elseif pos == "Right" then
+            Menu.ScrollbarPosition = 2
+        end
+    end
+end
+
+local function AdjustSelectorItem(item, direction, invokeCallback)
+    if not item then
+        return
+    end
+
+    if item.type == "toggle_selector" then
+        local currentIndex = item.selected or 1
+        if item.options and #item.options > 0 then
+            currentIndex = currentIndex + direction
+            if currentIndex < 1 then
+                currentIndex = #item.options
+            elseif currentIndex > #item.options then
+                currentIndex = 1
+            end
+        end
+
+        item.selected = currentIndex
+        local optionValue = (item.options and item.options[currentIndex]) or currentIndex
+        if invokeCallback and item.onClick then
+            local success, error = Menu.ExecuteCallbackSafely(item.onClick, item.value, optionValue)
+            if not success and Menu.NotifyError then
+                Menu.NotifyError(item.name or "Selector", error)
+            end
+        end
+        return
+    end
+
+    if item.type ~= "selector" then
+        return
+    end
+
+    local currentIndex = item.selected or 1
+    if IsWardrobeSelectorItem(item) then
+        currentIndex = math.max(1, currentIndex + direction)
+    elseif item.options and #item.options > 0 then
+        currentIndex = currentIndex + direction
+        if currentIndex < 1 then
+            currentIndex = #item.options
+        elseif currentIndex > #item.options then
+            currentIndex = 1
+        end
+    end
+
+    item.selected = currentIndex
+    ApplySelectorSpecialCases(item, currentIndex)
+
+    if invokeCallback and item.onClick then
+        local optionValue = (item.options and item.options[currentIndex]) or currentIndex
+        local success, error = Menu.ExecuteCallbackSafely(item.onClick, currentIndex, optionValue)
+        if not success and Menu.NotifyError then
+            Menu.NotifyError(item.name or "Selector", error)
+        end
+    end
+end
+
+local function ApplySliderSpecialCases(item)
+    if not item then
+        return
+    end
+
+    if item.name == "Smooth Menu" then
+        Menu.SmoothFactor = (item.value or 0) / 100.0
+    elseif item.name == "Menu Size" then
+        Menu.Scale = ((item.value or 100.0) / 100.0) * (Menu.DefaultScaleMultiplier or 1.0)
+    end
+end
+
+local function SetSliderItemFromPercent(item, percent, isToggleSlider)
+    if not item then
+        return
+    end
+
+    percent = math.max(0.0, math.min(1.0, percent or 0.0))
+
+    if isToggleSlider then
+        local minValue = item.sliderMin or 0.0
+        local maxValue = item.sliderMax or 100.0
+        local step = item.sliderStep or 0.1
+        local rawValue = minValue + ((maxValue - minValue) * percent)
+        local snapped = minValue + (math.floor((((rawValue - minValue) / step) + 0.5)) * step)
+        snapped = math.max(minValue, math.min(maxValue, snapped))
+
+        if item.sliderValue ~= snapped then
+            item.sliderValue = snapped
+            if item.onSliderChange then
+                local success, error = Menu.ExecuteCallbackSafely(item.onSliderChange, item.sliderValue)
+                if not success and Menu.NotifyError then
+                    Menu.NotifyError(item.name or "Slider", error)
+                end
+            end
+        end
+        return
+    end
+
+    local minValue = item.min or 0.0
+    local maxValue = item.max or 100.0
+    local step = item.step or 1.0
+    local rawValue = minValue + ((maxValue - minValue) * percent)
+    local snapped = minValue + (math.floor((((rawValue - minValue) / step) + 0.5)) * step)
+    snapped = math.max(minValue, math.min(maxValue, snapped))
+
+    if item.value ~= snapped then
+        item.value = snapped
+        ApplySliderSpecialCases(item)
+        if item.onClick then
+            local success, error = Menu.ExecuteCallbackSafely(item.onClick, item.value)
+            if not success and Menu.NotifyError then
+                Menu.NotifyError(item.name or "Slider", error)
+            end
+        end
+    end
+end
+
+local function TriggerPrimaryItemAction(item)
+    if not item or item.isSeparator then
+        return
+    end
+
+    if item.type == "toggle" or item.type == "toggle_selector" then
+        item.value = not item.value
+        Menu.ApplySpecialToggleState(item)
+        if item.onClick then
+            local success, error
+            if item.type == "toggle_selector" then
+                local option = (item.options and item.options[item.selected or 1]) or nil
+                success, error = Menu.ExecuteCallbackSafely(item.onClick, item.value, option)
+            else
+                success, error = Menu.ExecuteCallbackSafely(item.onClick, item.value)
+            end
+
+            if not success and Menu.NotifyError then
+                Menu.NotifyError(item.name or "Toggle", error)
+            else
+                Menu.NotifyInteraction(item, "toggle", item.value)
+            end
+        else
+            Menu.NotifyInteraction(item, "toggle", item.value)
+        end
+    elseif item.type == "action" then
+        if item.name == "Change Menu Keybind" then
+            Menu.SelectingKey = true
+            Menu.SelectedKey = Menu.SelectedKey
+            Menu.SelectedKeyName = Menu.SelectedKeyName
+        end
+
+        if item.onClick then
+            local success, error = Menu.ExecuteCallbackSafely(item.onClick)
+            if not success and Menu.NotifyError then
+                Menu.NotifyError(item.name or "Action", error)
+            else
+                Menu.NotifyInteraction(item, "action")
+            end
+        else
+            Menu.NotifyInteraction(item, "action")
+        end
+    elseif item.type == "selector" then
+        AdjustSelectorItem(item, 1, true)
+    end
+end
+
+local function GetMenuBoundsForMouse()
+    local scaledPos = Menu.GetScaledPosition()
+    local scale = Menu.Scale or 1.0
+    local headerVisualHeight = Menu.Banner.enabled and (Menu.Banner.height * scale) or scaledPos.headerHeight
+    local rowCount = 0
+
+    if Menu.OpenedCategory then
+        local category = Menu.Categories[Menu.OpenedCategory]
+        local currentTab = category and category.tabs and category.tabs[Menu.CurrentTab]
+        local totalItems = currentTab and currentTab.items and #currentTab.items or 0
+        rowCount = math.min(Menu.ItemsPerPage, totalItems)
+    else
+        rowCount = math.min(Menu.ItemsPerPage, math.max(0, #Menu.Categories - 1))
+    end
+
+    local totalHeight = headerVisualHeight + scaledPos.mainMenuHeight + scaledPos.mainMenuSpacing + (rowCount * scaledPos.itemHeight) + scaledPos.footerSpacing + scaledPos.footerHeight
+    return scaledPos.x, scaledPos.y, scaledPos.width, totalHeight
+end
+
+local function HandleClickableMenuInput()
+    if not Menu.Visible or not Menu.ClickableMenu or Menu.EditorMode then
+        Menu.ActiveMouseSlider = nil
+        Menu.MouseLeftWasDown = false
+        Menu.MouseRightWasDown = false
+        return
+    end
+
+    local mouseX, mouseY, leftDown, leftPressed, rightDown, rightPressed = GetOverlayMouseState()
+    if not mouseX then
+        return
+    end
+
+    local leftClicked = leftPressed or (leftDown and not Menu.MouseLeftWasDown)
+    local rightClicked = rightPressed or (rightDown and not Menu.MouseRightWasDown)
+
+    if not leftDown then
+        Menu.ActiveMouseSlider = nil
+    end
+
+    local menuX, menuY, menuWidth, menuHeight = GetMenuBoundsForMouse()
+    local insideMenu = IsPointInRect(mouseX, mouseY, menuX, menuY, menuWidth, menuHeight)
+
+    if rightClicked and insideMenu then
+        if Menu.OpenedCategory then
+            Menu.OpenedCategory = nil
+            Menu.CurrentItem = 1
+            Menu.CurrentTab = 1
+            Menu.ItemScrollOffset = 0
+        else
+            Menu.Visible = false
+        end
+
+        Menu.MouseLeftWasDown = leftDown
+        Menu.MouseRightWasDown = rightDown
+        return
+    end
+
+    local scaledPos = Menu.GetScaledPosition()
+    local scale = Menu.Scale or 1.0
+
+    if Menu.OpenedCategory then
+        local category = Menu.Categories[Menu.OpenedCategory]
+        local x = scaledPos.x
+        local startY = scaledPos.y + scaledPos.headerHeight
+        local width = scaledPos.width
+        local itemHeight = scaledPos.itemHeight
+        local mainMenuHeight = scaledPos.mainMenuHeight
+        local mainMenuSpacing = scaledPos.mainMenuSpacing
+
+        if category and category.hasTabs and category.tabs then
+            local numTabs = #category.tabs
+            local tabWidth = width / math.max(1, numTabs)
+            local currentX = x
+
+            for i, tab in ipairs(category.tabs) do
+                local tabX = currentX
+                local currentTabWidth = (i == numTabs) and ((x + width) - currentX) or (tabWidth + (0.5 * scale))
+                if IsPointInRect(mouseX, mouseY, tabX, startY, currentTabWidth, mainMenuHeight) then
+                    if leftClicked then
+                        Menu.CurrentTab = i
+                        local newTab = category.tabs[Menu.CurrentTab]
+                        if newTab and newTab.items then
+                            Menu.CurrentItem = findNextNonSeparator(newTab.items, 0, 1)
+                        else
+                            Menu.CurrentItem = 1
+                        end
+                        Menu.ItemScrollOffset = 0
+                        Menu.TabSelectorX = tabX
+                    end
+                    break
+                end
+                currentX = currentX + tabWidth
+            end
+
+            local currentTab = category.tabs[Menu.CurrentTab]
+            if currentTab and currentTab.items then
+                local totalItems = #currentTab.items
+                local maxVisible = Menu.ItemsPerPage
+                local itemY = startY + mainMenuHeight + mainMenuSpacing
+
+                for displayIndex = 1, math.min(maxVisible, totalItems) do
+                    local itemIndex = displayIndex + Menu.ItemScrollOffset
+                    local item = currentTab.items[itemIndex]
+                    local rowY = itemY + ((displayIndex - 1) * itemHeight)
+
+                    if item and IsPointInRect(mouseX, mouseY, x, rowY, width, itemHeight) then
+                        if not item.isSeparator then
+                            Menu.CurrentItem = itemIndex
+                        end
+
+                        if item and not item.isSeparator then
+                            local handled = false
+
+                            if item.type == "toggle" and item.hasSlider then
+                                local sliderWidth = 85 * scale
+                                local sliderHeight = 6 * scale
+                                local sliderX = x + width - sliderWidth - (95 * scale)
+                                local sliderY = rowY + (itemHeight / 2) - (sliderHeight / 2)
+                                if IsPointInRect(mouseX, mouseY, sliderX, sliderY - (6 * scale), sliderWidth, sliderHeight + (12 * scale)) then
+                                    local percent = (mouseX - sliderX) / sliderWidth
+                                    if leftDown or leftClicked then
+                                        SetSliderItemFromPercent(item, percent, true)
+                                        Menu.ActiveMouseSlider = { item = item, kind = "toggle_slider", sliderX = sliderX, sliderWidth = sliderWidth }
+                                    end
+                                    handled = true
+                                end
+                            elseif item.type == "slider" then
+                                local sliderWidth = 100 * scale
+                                local sliderHeight = 7 * scale
+                                local sliderX = x + width - sliderWidth - (60 * scale)
+                                local sliderY = rowY + (itemHeight / 2) - (sliderHeight / 2)
+                                if IsPointInRect(mouseX, mouseY, sliderX, sliderY - (6 * scale), sliderWidth, sliderHeight + (12 * scale)) then
+                                    local percent = (mouseX - sliderX) / sliderWidth
+                                    if leftDown or leftClicked then
+                                        SetSliderItemFromPercent(item, percent, false)
+                                        Menu.ActiveMouseSlider = { item = item, kind = "slider", sliderX = sliderX, sliderWidth = sliderWidth }
+                                    end
+                                    handled = true
+                                end
+                            elseif item.type == "toggle_selector" and item.options then
+                                local toggleWidth = 32 * scale
+                                local toggleHeight = 14 * scale
+                                local toggleX = x + width - toggleWidth - (15 * scale)
+                                local toggleY = rowY + (itemHeight / 2) - (toggleHeight / 2)
+                                local selectedOption = item.options[item.selected or 1] or ""
+                                local fullText = "< " .. selectedOption .. " >"
+                                local selectorWidth = Menu.GetTextWidth(fullText, 16)
+                                local selectorX = toggleX - selectorWidth - (15 * scale)
+                                local leftArrowWidth = Menu.GetTextWidth("< ", 16)
+                                local optionWidth = Menu.GetTextWidth(selectedOption, 16)
+
+                                if IsPointInRect(mouseX, mouseY, selectorX, rowY, selectorWidth, itemHeight) then
+                                    if leftClicked then
+                                        if mouseX <= (selectorX + leftArrowWidth + optionWidth * 0.35) then
+                                            AdjustSelectorItem(item, -1, true)
+                                        else
+                                            AdjustSelectorItem(item, 1, true)
+                                        end
+                                    end
+                                    handled = true
+                                elseif IsPointInRect(mouseX, mouseY, toggleX, toggleY, toggleWidth, toggleHeight) then
+                                    if leftClicked then
+                                        TriggerPrimaryItemAction(item)
+                                    end
+                                    handled = true
+                                end
+                            elseif item.type == "selector" and item.options then
+                                if IsWardrobeSelectorItem(item) then
+                                    local selectorText = "- " .. tostring(item.selected or 1) .. " -"
+                                    local selectorWidth = Menu.GetTextWidth(selectorText, 17)
+                                    local selectorX = x + width - selectorWidth - (16 * scale)
+                                    if IsPointInRect(mouseX, mouseY, selectorX, rowY, selectorWidth, itemHeight) then
+                                        if leftClicked then
+                                            if mouseX <= selectorX + (selectorWidth / 2) then
+                                                AdjustSelectorItem(item, -1, true)
+                                            else
+                                                AdjustSelectorItem(item, 1, true)
+                                            end
+                                        end
+                                        handled = true
+                                    end
+                                else
+                                    local selectedOption = item.options[item.selected or 1] or ""
+                                    local fullText = "< " .. selectedOption .. " >"
+                                    local selectorWidth = Menu.GetTextWidth(fullText, 17)
+                                    local selectorX = x + width - selectorWidth - (16 * scale)
+                                    local leftArrowWidth = Menu.GetTextWidth("< ", 17)
+                                    local optionWidth = Menu.GetTextWidth(selectedOption, 17)
+
+                                    if IsPointInRect(mouseX, mouseY, selectorX, rowY, selectorWidth, itemHeight) then
+                                        if leftClicked then
+                                            if mouseX <= (selectorX + leftArrowWidth + optionWidth * 0.35) then
+                                                AdjustSelectorItem(item, -1, true)
+                                            else
+                                                AdjustSelectorItem(item, 1, true)
+                                            end
+                                        end
+                                        handled = true
+                                    end
+                                end
+                            end
+
+                            if leftClicked and not handled then
+                                TriggerPrimaryItemAction(item)
+                            end
+                        end
+
+                        break
+                    end
+                end
+            end
+        end
+    else
+        local x = scaledPos.x
+        local width = scaledPos.width
+        local bannerHeight = Menu.Banner.enabled and (Menu.Banner.height * scale) or scaledPos.headerHeight
+        local startY = scaledPos.y + bannerHeight
+        local itemHeight = scaledPos.itemHeight
+        local mainMenuHeight = scaledPos.mainMenuHeight
+        local mainMenuSpacing = scaledPos.mainMenuSpacing
+
+        if Menu.TopLevelTabs then
+            local tabCount = #Menu.TopLevelTabs
+            local tabWidth = width / math.max(1, tabCount)
+            for i, tab in ipairs(Menu.TopLevelTabs) do
+                local tabX = x + ((i - 1) * tabWidth)
+                if IsPointInRect(mouseX, mouseY, tabX, startY, tabWidth, mainMenuHeight) then
+                    if leftClicked then
+                        Menu.CurrentTopTab = i
+                        Menu.UpdateCategoriesFromTopTab()
+                    end
+                    break
+                end
+            end
+        end
+
+        local totalCategories = #Menu.Categories - 1
+        local maxVisible = Menu.ItemsPerPage
+        for displayIndex = 1, math.min(maxVisible, totalCategories) do
+            local categoryIndex = displayIndex + Menu.CategoryScrollOffset + 1
+            local category = Menu.Categories[categoryIndex]
+            local rowY = startY + mainMenuHeight + mainMenuSpacing + ((displayIndex - 1) * itemHeight)
+
+            if category and IsPointInRect(mouseX, mouseY, x, rowY, width, itemHeight) then
+                Menu.CurrentCategory = categoryIndex
+                if leftClicked and category.hasTabs and category.tabs then
+                    Menu.OpenedCategory = categoryIndex
+                    Menu.CurrentTab = 1
+                    if category.tabs[1] and category.tabs[1].items then
+                        Menu.CurrentItem = findNextNonSeparator(category.tabs[1].items, 0, 1)
+                    else
+                        Menu.CurrentItem = 1
+                    end
+                    Menu.ItemScrollOffset = 0
+                end
+                break
+            end
+        end
+    end
+
+    if leftDown and Menu.ActiveMouseSlider and Menu.ActiveMouseSlider.item then
+        local slider = Menu.ActiveMouseSlider
+        local percent = (mouseX - slider.sliderX) / slider.sliderWidth
+        SetSliderItemFromPercent(slider.item, percent, slider.kind == "toggle_slider")
+    end
+
+    Menu.MouseLeftWasDown = leftDown
+    Menu.MouseRightWasDown = rightDown
 end
 
 function Menu.HandleInput()
@@ -3354,6 +3861,8 @@ function Menu.HandleInput()
         end
         return
     end
+
+    HandleClickableMenuInput()
 
     if Menu.OpenedCategory then
         local category = Menu.Categories[Menu.OpenedCategory]
