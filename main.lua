@@ -484,6 +484,19 @@ local function MenuGetScreenSize()
     return 1920, 1080
 end
 
+local function SetInteractiveOverlayState(enable)
+    local desiredState = enable == true
+    if Menu.InteractiveOverlayEnabled == desiredState then
+        return
+    end
+
+    Menu.InteractiveOverlayEnabled = desiredState
+
+    if Susano and Susano.EnableOverlay then
+        Susano.EnableOverlay(desiredState)
+    end
+end
+
 local function CleanupNotifications()
     if not Menu.Notifications then
         Menu.Notifications = {}
@@ -2871,9 +2884,7 @@ function Menu.Render()
     end
 
     local useInteractiveOverlay = (Menu.Visible and Menu.ClickableMenu) or Menu.EditorMode
-    if Susano and Susano.EnableOverlay then
-        Susano.EnableOverlay(useInteractiveOverlay == true)
-    end
+    SetInteractiveOverlayState(useInteractiveOverlay == true)
 
     Susano.BeginFrame()
 
@@ -3069,41 +3080,85 @@ function Menu.ApplySpecialToggleState(item)
     elseif item.name == "Show Spectator List" then
         Menu.ShowSpectatorList = item.value == true
     end
+
+    SetInteractiveOverlayState((Menu.Visible and Menu.ClickableMenu) or Menu.EditorMode)
 end
 
 local function IsPointInRect(px, py, x, y, width, height)
     return px >= x and px <= (x + width) and py >= y and py <= (y + height)
 end
 
-local function GetOverlayMouseState()
-    if not (Susano and Susano.GetCursorPos and Susano.GetAsyncKeyState) then
+local function ResolveOverlayCursorPosition()
+    if not (Susano and Susano.GetCursorPos) then
         return nil
     end
 
-    local cursorPos = Susano.GetCursorPos()
-    local mouseX = 0
-    local mouseY = 0
+    local cursorPos, cursorPosY = Susano.GetCursorPos()
+    local mouseX = nil
+    local mouseY = nil
 
-    if cursorPos then
+    if type(cursorPos) == "number" and type(cursorPosY) == "number" then
+        mouseX = cursorPos
+        mouseY = cursorPosY
+    elseif cursorPos then
         if type(cursorPos) == "table" then
-            mouseX = cursorPos[1] or cursorPos.x or 0
-            mouseY = cursorPos[2] or cursorPos.y or 0
+            mouseX = cursorPos.x or cursorPos[1]
+            mouseY = cursorPos.y or cursorPos[2]
         else
             local xOk, x = pcall(function() return cursorPos.x end)
             local yOk, y = pcall(function() return cursorPos.y end)
-            if xOk and x then mouseX = x end
-            if yOk and y then mouseY = y end
+            if xOk and type(x) == "number" then mouseX = x end
+            if yOk and type(y) == "number" then mouseY = y end
+
+            if mouseX == nil or mouseY == nil then
+                local iOk, ix = pcall(function() return cursorPos[1] end)
+                local jOk, iy = pcall(function() return cursorPos[2] end)
+                if mouseX == nil and iOk and type(ix) == "number" then mouseX = ix end
+                if mouseY == nil and jOk and type(iy) == "number" then mouseY = iy end
+            end
         end
     end
 
-    local screenW, screenH = MenuGetScreenSize()
-    if mouseX and mouseY and screenW and screenH and mouseX >= 0 and mouseY >= 0 and mouseX <= 1.5 and mouseY <= 1.5 then
-        mouseX = mouseX * screenW
-        mouseY = mouseY * screenH
+    if type(mouseX) ~= "number" or type(mouseY) ~= "number" then
+        return nil
     end
 
-    local leftDown, leftPressed = Susano.GetAsyncKeyState(0x01)
-    local rightDown, rightPressed = Susano.GetAsyncKeyState(0x02)
+    local screenW, screenH = MenuGetScreenSize()
+    if screenW and screenH and screenW > 0 and screenH > 0 then
+        if mouseX >= 0 and mouseY >= 0 and mouseX <= 1.0 and mouseY <= 1.0 then
+            mouseX = mouseX * screenW
+            mouseY = mouseY * screenH
+        elseif mouseX >= 0 and mouseY >= 0 and mouseX <= 1.5 and mouseY <= 1.5 then
+            mouseX = mouseX * screenW
+            mouseY = mouseY * screenH
+        end
+
+        mouseX = math.max(0, math.min(screenW, mouseX))
+        mouseY = math.max(0, math.min(screenH, mouseY))
+    end
+
+    return mouseX, mouseY
+end
+
+local function GetOverlayMouseState()
+    if not (Susano and Susano.GetCursorPos) then
+        return nil
+    end
+
+    local mouseX, mouseY = ResolveOverlayCursorPosition()
+    if not mouseX or not mouseY then
+        return nil
+    end
+
+    local leftDown = false
+    local leftPressed = false
+    local rightDown = false
+    local rightPressed = false
+
+    if Susano.GetAsyncKeyState then
+        leftDown, leftPressed = Susano.GetAsyncKeyState(0x01)
+        rightDown, rightPressed = Susano.GetAsyncKeyState(0x02)
+    end
 
     return mouseX, mouseY,
         (leftDown == true or leftDown == 1), leftPressed == true,
@@ -3111,7 +3166,7 @@ local function GetOverlayMouseState()
 end
 
 local function DrawClickableCursor()
-    if not Menu.Visible or not Menu.ClickableMenu or not Susano or not Susano.GetCursorPos then
+    if not Menu.Visible or not (Menu.ClickableMenu or Menu.EditorMode) or not Susano or not Susano.GetCursorPos then
         return
     end
 
