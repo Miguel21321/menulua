@@ -497,6 +497,8 @@ local function SetInteractiveOverlayState(enable)
     end
 end
 
+local DrawClickableCursor
+
 local function CleanupNotifications()
     if not Menu.Notifications then
         Menu.Notifications = {}
@@ -2925,7 +2927,9 @@ function Menu.Render()
         end
     end
 
-    DrawClickableCursor()
+    if not (Susano and Susano.EnableOverlay) then
+        DrawClickableCursor()
+    end
 
     if Menu.HasNotifications() then
         Menu.DrawNotifications()
@@ -3165,7 +3169,7 @@ local function GetOverlayMouseState()
         (rightDown == true or rightDown == 1), rightPressed == true
 end
 
-local function DrawClickableCursor()
+DrawClickableCursor = function()
     if not Menu.Visible or not (Menu.ClickableMenu or Menu.EditorMode) or not Susano or not Susano.GetCursorPos then
         return
     end
