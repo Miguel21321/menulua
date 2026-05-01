@@ -14,6 +14,10 @@ Menu.EditorDragging = false
 Menu.EditorDragOffsetX = 0
 Menu.EditorDragOffsetY = 0
 Menu.EditorMode = false
+Menu.OverlayPanelRects = {}
+Menu.OverlayPanelDragging = false
+Menu.OverlayPanelDragOffsetX = 0
+Menu.OverlayPanelDragOffsetY = 0
 Menu.ShowSnowflakes = false
 Menu.SelectorY = 0
 Menu.CategorySelectorY = 0
@@ -503,6 +507,8 @@ end
 local function IsInteractiveOverlayActive()
     return (Menu.Visible and Menu.ClickableMenu)
         or Menu.EditorMode
+        or Menu.KeybindsPositionMode
+        or Menu.SpectatorPositionMode
         or Menu.SelectingBind
         or Menu.SelectingKey
         or Menu.InputOpen
@@ -2392,6 +2398,14 @@ function Menu.DrawOverlayPanel(title, rows, startX, startY, alpha, options)
         Menu.DrawTextEmphasis(labelX, labelY, labelText, rowSize, 1.0, 1.0, 1.0, rowAlpha)
     end
 
+    Menu.LastOverlayPanelRect = {
+        title = tostring(title or ""),
+        x = panelX,
+        y = panelY,
+        width = width,
+        height = height
+    }
+
     return width, height
 end
 
@@ -2439,6 +2453,9 @@ end
 
 function Menu.DrawKeybindsInterface(alpha, startY)
     if alpha <= 0 then
+        if Menu.OverlayPanelRects then
+            Menu.OverlayPanelRects.keybinds = nil
+        end
         return 0, 0
     end
 
@@ -2446,15 +2463,29 @@ function Menu.DrawKeybindsInterface(alpha, startY)
     local screenWidth = getOverlayScreenSize()
     local panelX = (screenWidth - 20) + (tonumber(Menu.KeybindsPanelOffsetX) or 0)
     local panelY = (startY or 20) + (tonumber(Menu.KeybindsPanelOffsetY) or 0)
-    return Menu.DrawOverlayPanel("Keybinds", rows, panelX, panelY, alpha, {
+    local width, height = Menu.DrawOverlayPanel("Keybinds", rows, panelX, panelY, alpha, {
         alignRight = true,
         minWidth = 230,
         clampToScreen = true
     })
+
+    if Menu.OverlayPanelRects and Menu.LastOverlayPanelRect then
+        Menu.OverlayPanelRects.keybinds = {
+            x = Menu.LastOverlayPanelRect.x,
+            y = Menu.LastOverlayPanelRect.y,
+            width = Menu.LastOverlayPanelRect.width,
+            height = Menu.LastOverlayPanelRect.height
+        }
+    end
+
+    return width, height
 end
 
 function Menu.DrawSpectatorList(alpha, startY)
     if alpha <= 0 then
+        if Menu.OverlayPanelRects then
+            Menu.OverlayPanelRects.spectators = nil
+        end
         return 0, 0
     end
 
@@ -2481,11 +2512,22 @@ function Menu.DrawSpectatorList(alpha, startY)
     local screenWidth = getOverlayScreenSize()
     local panelX = (screenWidth - 20) + (tonumber(Menu.SpectatorPanelOffsetX) or 0)
     local panelY = (startY or 20) + (tonumber(Menu.SpectatorPanelOffsetY) or 0)
-    return Menu.DrawOverlayPanel("Spectators", rows, panelX, panelY, alpha, {
+    local width, height = Menu.DrawOverlayPanel("Spectators", rows, panelX, panelY, alpha, {
         alignRight = true,
         minWidth = 210,
         clampToScreen = true
     })
+
+    if Menu.OverlayPanelRects and Menu.LastOverlayPanelRect then
+        Menu.OverlayPanelRects.spectators = {
+            x = Menu.LastOverlayPanelRect.x,
+            y = Menu.LastOverlayPanelRect.y,
+            width = Menu.LastOverlayPanelRect.width,
+            height = Menu.LastOverlayPanelRect.height
+        }
+    end
+
+    return width, height
 end
 
 Menu.Particles = Menu.Particles or {}
