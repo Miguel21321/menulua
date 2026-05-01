@@ -2927,13 +2927,11 @@ function Menu.Render()
         end
     end
 
-    if not (Susano and Susano.EnableOverlay) then
-        DrawClickableCursor()
-    end
-
     if Menu.HasNotifications() then
         Menu.DrawNotifications()
     end
+
+    DrawClickableCursor()
 
     if Susano.SubmitFrame then
         Susano.SubmitFrame()
