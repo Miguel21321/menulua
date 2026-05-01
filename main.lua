@@ -21,7 +21,7 @@ Menu.TabSelectorX = 0
 Menu.TabSelectorWidth = 0
 Menu.SmoothFactor = 0.2
 Menu.GradientType = 1
-Menu.ScrollbarPosition = 1
+Menu.ScrollbarPosition = 2
 
 Menu.LoadingBarAlpha = 0.0
 Menu.KeySelectorAlpha = 0.0
@@ -89,7 +89,7 @@ end
 Menu.Banner = {
     enabled = true,
     imageUrl = "https://i.imgur.com/0wsZY4t.png",
-    height = 96
+    height = 94
 }
 
 Menu.bannerTexture = nil
@@ -192,17 +192,17 @@ end
 Menu.Position = {
     x = 50,
     y = 170,
-    width = 360,
-    itemHeight = 34,
-    mainMenuHeight = 28,
-    headerHeight = 96,
-    footerHeight = 42,
+    width = 364,
+    itemHeight = 38,
+    mainMenuHeight = 30,
+    headerHeight = 94,
+    footerHeight = 54,
     footerSpacing = 6,
-    mainMenuSpacing = 5,
-    footerRadius = 8,
-    itemRadius = 8,
-    scrollbarWidth = 8,
-    scrollbarPadding = 5,
+    mainMenuSpacing = 6,
+    footerRadius = 10,
+    itemRadius = 7,
+    scrollbarWidth = 6,
+    scrollbarPadding = 6,
     headerRadius = 10
 }
 Menu.DefaultScaleMultiplier = 1.16
@@ -212,6 +212,17 @@ Menu.TextFont = 0
 Menu.TextNativeScaleDivisor = 50.0
 Menu.TextNativeUseOutline = false
 Menu.TextShadowEnabled = true
+Menu.Fonts = {
+    loaded = false,
+    failed = false,
+    handles = {},
+    definitions = {
+        body = { path = "C:/Windows/Fonts/segoeui.ttf", size = 16 },
+        strong = { path = "C:/Windows/Fonts/seguisb.ttf", size = 17 },
+        display = { path = "C:/Windows/Fonts/bahnschrift.ttf", size = 22 },
+        mono = { path = "C:/Windows/Fonts/consola.ttf", size = 14 }
+    }
+}
 Menu.Notifications = {}
 Menu.NotificationDuration = 5000
 Menu.NotificationMaxVisible = 4
@@ -241,6 +252,50 @@ function Menu.GetScaledPosition()
     }
 end
 
+function Menu.EnsureFontsLoaded()
+    if not Menu.Fonts or Menu.Fonts.loaded or Menu.Fonts.failed then
+        return
+    end
+
+    if not (Susano and Susano.LoadFont) then
+        Menu.Fonts.failed = true
+        return
+    end
+
+    for role, definition in pairs(Menu.Fonts.definitions or {}) do
+        if definition and definition.path and definition.size then
+            local ok, fontId = pcall(Susano.LoadFont, definition.path, definition.size)
+            if ok and fontId and fontId ~= 0 then
+                Menu.Fonts.handles[role] = fontId
+            end
+        end
+    end
+
+    Menu.Fonts.loaded = true
+end
+
+local function PushFontRole(role)
+    if not role or not (Susano and Susano.PushFont) then
+        return false
+    end
+
+    Menu.EnsureFontsLoaded()
+
+    local handle = Menu.Fonts and Menu.Fonts.handles and Menu.Fonts.handles[role]
+    if not handle then
+        return false
+    end
+
+    Susano.PushFont(handle)
+    return true
+end
+
+local function PopFontRole(pushed)
+    if pushed and Susano and Susano.PopFont then
+        Susano.PopFont()
+    end
+end
+
 local function NormalizeColorComponent(value)
     local component = tonumber(value) or 0
     if component > 1.0 then
@@ -268,13 +323,13 @@ local function GetMenuChromeColors()
         accentR = accentR,
         accentG = accentG,
         accentB = accentB,
-        bodyTopR = 0.07, bodyTopG = 0.09, bodyTopB = 0.13,
-        bodyBottomR = 0.03, bodyBottomG = 0.04, bodyBottomB = 0.06,
-        rowTopR = 0.10, rowTopG = 0.12, rowTopB = 0.16,
-        rowBottomR = 0.06, rowBottomG = 0.08, rowBottomB = 0.11,
-        rowIdleTopR = 0.08, rowIdleTopG = 0.10, rowIdleTopB = 0.14,
-        rowIdleBottomR = 0.05, rowIdleBottomG = 0.06, rowIdleBottomB = 0.09,
-        textDimR = 0.73, textDimG = 0.80, textDimB = 0.87
+        bodyTopR = 0.08, bodyTopG = 0.10, bodyTopB = 0.14,
+        bodyBottomR = 0.03, bodyBottomG = 0.05, bodyBottomB = 0.08,
+        rowTopR = 0.11, rowTopG = 0.14, rowTopB = 0.19,
+        rowBottomR = 0.06, rowBottomG = 0.08, rowBottomB = 0.12,
+        rowIdleTopR = 0.07, rowIdleTopG = 0.09, rowIdleTopB = 0.13,
+        rowIdleBottomR = 0.04, rowIdleBottomG = 0.06, rowIdleBottomB = 0.09,
+        textDimR = 0.69, textDimG = 0.77, textDimB = 0.84
     }
 end
 
@@ -320,7 +375,9 @@ local function DrawPanelSurface(x, y, width, height, radius, alpha, options)
             Susano.DrawRectFilled(x, y, width, height, chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, bgAlpha, radius)
         end
 
-        Susano.DrawRectFilled(x + 1, y + 1, math.max(0, width - 2), 1, 1.0, 1.0, 1.0, 0.05 * alpha, 0)
+        Susano.DrawRectFilled(x + 1, y + 1, math.max(0, width - 2), 1, 1.0, 1.0, 1.0, 0.06 * alpha, 0)
+        Susano.DrawRectFilled(x + 1, y + 1, math.max(0, width - 2), math.max(1, 18 * (Menu.Scale or 1.0)),
+            1.0, 1.0, 1.0, 0.02 * alpha, radius)
         if options.accentLine ~= false then
             DrawAccentRule(x + 1, y + 1, math.max(0, width - 2), math.max(2, 3 * (Menu.Scale or 1.0)), alpha, radius)
         end
@@ -339,43 +396,45 @@ end
 local function DrawMenuRowSurface(x, y, width, height, isSelected)
     local chrome = GetMenuChromeColors()
     local scale = Menu.Scale or 1.0
-    local radius = math.max(5, (Menu.Position.itemRadius or 8) * scale * 0.78)
+    local radius = math.max(2, (Menu.Position.itemRadius or 4) * scale)
 
     if Susano and Susano.DrawRectFilled then
         if isSelected then
-            local accentR = math.min(1.0, chrome.accentR * 0.78 + 0.08)
-            local accentG = math.min(1.0, chrome.accentG * 0.78 + 0.08)
-            local accentB = math.min(1.0, chrome.accentB * 0.78 + 0.08)
+            local accentR = math.min(1.0, chrome.accentR * 0.62 + 0.06)
+            local accentG = math.min(1.0, chrome.accentG * 0.62 + 0.08)
+            local accentB = math.min(1.0, chrome.accentB * 0.62 + 0.10)
+            local stripWidth = math.max(2, 3 * scale)
 
-            Susano.DrawRectFilled(x + 3, y + 4, width, height, 0.0, 0.0, 0.0, 0.14, radius)
             if Susano and Susano.DrawRectGradient then
                 Susano.DrawRectGradient(x, y, width, height,
-                    accentR, accentG, accentB, 0.88,
+                    accentR, accentG, accentB, 0.34,
                     chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.96,
-                    chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.96,
-                    accentR, accentG, accentB, 0.80,
+                    chrome.bodyBottomR, chrome.bodyBottomG, chrome.bodyBottomB, 0.96,
+                    accentR, accentG, accentB, 0.24,
                     radius)
             else
-                Susano.DrawRectFilled(x, y, width, height, accentR, accentG, accentB, 0.84, radius)
+                Susano.DrawRectFilled(x, y, width, height, chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.96, radius)
             end
-            Susano.DrawRectFilled(x + (8 * scale), y + (6 * scale), 2, math.max(8, height - (12 * scale)), chrome.accentR, chrome.accentG, chrome.accentB, 1.0, 2)
+            Susano.DrawRectFilled(x + 2, y + 2, math.max(0, width - 4), 1, 1.0, 1.0, 1.0, 0.16, 0)
+            Susano.DrawRectFilled(x + (7 * scale), y + (4 * scale), stripWidth, math.max(4, height - (8 * scale)),
+                chrome.accentR, chrome.accentG, chrome.accentB, 1.0, stripWidth / 2)
             if Susano and Susano.DrawRect then
-                Susano.DrawRect(x, y, width, height, chrome.accentR, chrome.accentG, chrome.accentB, 0.68, 1.0)
+                Susano.DrawRect(x, y, width, height, chrome.accentR, chrome.accentG, chrome.accentB, 0.28, 1.0)
             end
         else
             if Susano and Susano.DrawRectGradient then
                 Susano.DrawRectGradient(x, y, width, height,
-                    chrome.rowIdleTopR, chrome.rowIdleTopG, chrome.rowIdleTopB, 0.74,
-                    chrome.rowIdleBottomR, chrome.rowIdleBottomG, chrome.rowIdleBottomB, 0.74,
-                    chrome.rowIdleBottomR, chrome.rowIdleBottomG, chrome.rowIdleBottomB, 0.74,
-                    chrome.rowIdleTopR, chrome.rowIdleTopG, chrome.rowIdleTopB, 0.74,
+                    chrome.rowIdleTopR, chrome.rowIdleTopG, chrome.rowIdleTopB, 0.76,
+                    chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.70,
+                    chrome.bodyBottomR, chrome.bodyBottomG, chrome.bodyBottomB, 0.70,
+                    chrome.rowIdleBottomR, chrome.rowIdleBottomG, chrome.rowIdleBottomB, 0.76,
                     radius)
             else
-                Susano.DrawRectFilled(x, y, width, height, chrome.rowIdleTopR, chrome.rowIdleTopG, chrome.rowIdleTopB, 0.72, radius)
+                Susano.DrawRectFilled(x, y, width, height, 0.03, 0.03, 0.03, 0.58, radius)
             end
-            Susano.DrawRectFilled(x + 1, y + 1, math.max(0, width - 2), 1, 1.0, 1.0, 1.0, 0.04, 0)
+            Susano.DrawRectFilled(x, y + height - 1, width, 1, 1.0, 1.0, 1.0, 0.06, 0)
             if Susano and Susano.DrawRect then
-                Susano.DrawRect(x, y, width, height, 1.0, 1.0, 1.0, 0.06, 1.0)
+                Susano.DrawRect(x, y, width, height, 1.0, 1.0, 1.0, 0.04, 1.0)
             end
         end
     else
@@ -383,29 +442,38 @@ local function DrawMenuRowSurface(x, y, width, height, isSelected)
             Menu.DrawRoundedRect(x, y, width, height,
                 math.floor(chrome.accentR * 255), math.floor(chrome.accentG * 255), math.floor(chrome.accentB * 255), 220, radius)
         else
-            Menu.DrawRoundedRect(x, y, width, height, 18, 22, 28, 190, radius)
+            Menu.DrawRoundedRect(x, y, width, height, 8, 8, 8, 148, radius)
         end
     end
 end
 
 local function DrawKeyBadge(text, anchorX, centerY, alignRight, active, alpha, size)
-    local label = tostring(text or "")
+    local label = string.upper(tostring(text or ""))
     local badgeSize = size or 11
     local scale = Menu.Scale or 1.0
     local resolvedBadgeSize = math.max(1, badgeSize * scale)
     local badgeHeight = math.max(18, 18 * scale)
-    local badgeWidth = math.max(badgeHeight + 6, Menu.GetTextWidth(label, badgeSize) + (16 * scale))
+    local badgeWidth = math.max(badgeHeight + 6, Menu.GetTextWidth(label, badgeSize, "mono") + (16 * scale))
     local badgeX = alignRight and (anchorX - badgeWidth) or anchorX
     local badgeY = centerY - (badgeHeight / 2)
     local chrome = GetMenuChromeColors()
 
-    local bgR = active and (chrome.accentR * 0.65) or 0.09
-    local bgG = active and (chrome.accentG * 0.65) or 0.12
-    local bgB = active and (chrome.accentB * 0.65) or 0.16
-    local bgAlpha = active and (0.92 * (alpha or 1.0)) or (0.72 * (alpha or 1.0))
+    local bgR = active and (chrome.accentR * 0.56) or chrome.bodyTopR
+    local bgG = active and (chrome.accentG * 0.56) or chrome.bodyTopG
+    local bgB = active and (chrome.accentB * 0.56) or chrome.bodyTopB
+    local bgAlpha = active and (0.94 * (alpha or 1.0)) or (0.76 * (alpha or 1.0))
 
     if Susano and Susano.DrawRectFilled then
-        Susano.DrawRectFilled(badgeX, badgeY, badgeWidth, badgeHeight, bgR, bgG, bgB, bgAlpha, badgeHeight / 2)
+        if active and Susano.DrawRectGradient then
+            Susano.DrawRectGradient(badgeX, badgeY, badgeWidth, badgeHeight,
+                bgR, bgG, bgB, bgAlpha,
+                chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.96 * (alpha or 1.0),
+                chrome.bodyBottomR, chrome.bodyBottomG, chrome.bodyBottomB, 0.96 * (alpha or 1.0),
+                bgR, bgG, bgB, math.max(0.24, bgAlpha * 0.74),
+                badgeHeight / 2)
+        else
+            Susano.DrawRectFilled(badgeX, badgeY, badgeWidth, badgeHeight, bgR, bgG, bgB, bgAlpha, badgeHeight / 2)
+        end
         if Susano and Susano.DrawRect then
             Susano.DrawRect(badgeX, badgeY, badgeWidth, badgeHeight, chrome.accentR, chrome.accentG, chrome.accentB, 0.28 * (alpha or 1.0), 1.0)
         end
@@ -414,10 +482,10 @@ local function DrawKeyBadge(text, anchorX, centerY, alignRight, active, alpha, s
             math.floor(bgR * 255), math.floor(bgG * 255), math.floor(bgB * 255), math.floor(bgAlpha * 255), badgeHeight / 2)
     end
 
-    local labelWidth = Menu.GetTextWidth(label, badgeSize)
+    local labelWidth = Menu.GetTextWidth(label, badgeSize, "mono")
     local labelX = badgeX + (badgeWidth / 2) - (labelWidth / 2)
     local labelY = badgeY + (badgeHeight / 2) - (resolvedBadgeSize / 2)
-    Menu.DrawText(labelX, labelY, label, badgeSize, 1.0, 1.0, 1.0, alpha or 1.0)
+    Menu.DrawText(labelX, labelY, label, badgeSize, 1.0, 1.0, 1.0, alpha or 1.0, "mono")
 
     return badgeWidth, badgeHeight, badgeX, badgeY
 end
@@ -443,6 +511,83 @@ local function GetCategoryToken(categoryName)
     local fallback = tostring(categoryName or "?")
     fallback = string.gsub(fallback, "%s+", "")
     return string.upper(string.sub(fallback, 1, math.min(2, #fallback)))
+end
+
+local function GetCategoryIconText(category)
+    local name = category and tostring(category.name or "") or ""
+    local fallbackMap = {
+        ["Miguelin"] = "A",
+        ["Farmeo Coca"] = "C",
+        ["Player"] = "P",
+        ["Online"] = "O",
+        ["Visual"] = "V",
+        ["Combat"] = "+",
+        ["Vehicle"] = "V",
+        ["Miscellaneous"] = "M",
+        ["Settings"] = "S"
+    }
+
+    local icon = category and category.icon or nil
+    if type(icon) == "string" and icon ~= "" then
+        local lower = string.lower(icon)
+        if string.find(lower, "ð") or string.find(lower, "â") then
+            icon = nil
+        end
+    end
+
+    if type(icon) == "string" and icon ~= "" then
+        return icon
+    end
+
+    return fallbackMap[name] or GetCategoryToken(name)
+end
+
+local function GetFooterIdentityText()
+    if GetPlayerName and PlayerId then
+        local ok, playerName = pcall(function()
+            return GetPlayerName(PlayerId())
+        end)
+        if ok and type(playerName) == "string" and playerName ~= "" then
+            return playerName
+        end
+    end
+
+    return "Arcane"
+end
+
+local function GetCurrentMenuTitle()
+    if Menu.OpenedCategory and Menu.Categories then
+        local category = Menu.Categories[Menu.OpenedCategory]
+        if category and category.name and category.name ~= "" then
+            return tostring(category.name)
+        end
+    end
+
+    if Menu.Categories and Menu.Categories[1] and Menu.Categories[1].name then
+        return tostring(Menu.Categories[1].name)
+    end
+
+    return "Main Menu"
+end
+
+local function GetCurrentMenuContext()
+    if Menu.OpenedCategory and Menu.Categories then
+        local category = Menu.Categories[Menu.OpenedCategory]
+        local currentTab = category and category.tabs and category.tabs[Menu.CurrentTab]
+        if currentTab and currentTab.name and currentTab.name ~= "" then
+            return tostring(currentTab.name)
+        end
+
+        if category and category.name and category.name ~= "" then
+            return tostring(category.name)
+        end
+    end
+
+    if Menu.TopLevelTabs and Menu.TopLevelTabs[Menu.CurrentTopTab] and Menu.TopLevelTabs[Menu.CurrentTopTab].name then
+        return tostring(Menu.TopLevelTabs[Menu.CurrentTopTab].name)
+    end
+
+    return "Navigation"
 end
 
 function Menu.DrawRect(x, y, width, height, r, g, b, a)
@@ -624,18 +769,22 @@ local function DrawTextRaw(x, y, text, resolvedSize, r, g, b, a, emphasis)
     )
 end
 
-function Menu.GetTextWidth(text, size_px)
+function Menu.GetTextWidth(text, size_px, fontRole)
     local resolvedText = tostring(text or "")
     local resolvedSize = ResolveTextSize(size_px)
+    local pushed = PushFontRole(fontRole)
 
     if Susano and Susano.GetTextWidth then
-        return Susano.GetTextWidth(resolvedText, resolvedSize)
+        local width = Susano.GetTextWidth(resolvedText, resolvedSize)
+        PopFontRole(pushed)
+        return width
     end
 
+    PopFontRole(pushed)
     return string.len(resolvedText) * (resolvedSize * 0.58)
 end
 
-function Menu.DrawText(x, y, text, size_px, r, g, b, a)
+function Menu.DrawText(x, y, text, size_px, r, g, b, a, fontRole)
     local resolvedSize = ResolveTextSize(size_px)
     r = r or 1.0
     g = g or 1.0
@@ -648,11 +797,13 @@ function Menu.DrawText(x, y, text, size_px, r, g, b, a)
     if a > 1.0 then a = a / 255.0 end
 
     if Susano and Susano.DrawText then
+        local pushed = PushFontRole(fontRole)
         Susano.DrawText(x, y, tostring(text or ""), resolvedSize, r, g, b, a)
+        PopFontRole(pushed)
     end
 end
 
-function Menu.DrawTextEmphasis(x, y, text, size_px, r, g, b, a)
+function Menu.DrawTextEmphasis(x, y, text, size_px, r, g, b, a, fontRole)
     local resolvedSize = ResolveTextSize(size_px)
     r = r or 1.0
     g = g or 1.0
@@ -668,11 +819,13 @@ function Menu.DrawTextEmphasis(x, y, text, size_px, r, g, b, a)
         return
     end
 
+    local pushed = PushFontRole(fontRole)
     local shadowOffset = resolvedSize >= 20 and 1 or 1
     local shadowAlpha = math.min(a * 0.38, 0.42)
 
     Susano.DrawText(x, y + shadowOffset, tostring(text or ""), resolvedSize, 0.0, 0.0, 0.0, shadowAlpha)
     Susano.DrawText(x, y, tostring(text or ""), resolvedSize, r, g, b, a)
+    PopFontRole(pushed)
 end
 
 local function MenuGetScreenSize()
@@ -1051,64 +1204,105 @@ function Menu.DrawHeader()
     local x = scaledPos.x
     local y = scaledPos.y
     local width = scaledPos.width - 1
-    local height = scaledPos.headerHeight
-    local radius = scaledPos.headerRadius
-    local headerHeight = Menu.Banner.enabled and (Menu.Banner.height * scale) or height
+    local height = Menu.Banner.enabled and (Menu.Banner.height * scale) or scaledPos.headerHeight
     local chrome = GetMenuChromeColors()
+    local headerRadius = math.max(8, (scaledPos.headerRadius or 0) + (2 * scale))
+    local iconSize = 44 * scale
+    local iconX = x + (16 * scale)
+    local iconY = y + (18 * scale)
+    local brandX = iconX + iconSize + (16 * scale)
+    local titleY = y + (18 * scale)
+    local subtitleY = y + (47 * scale)
+    local previewWidth = 118 * scale
+    local previewHeight = height - (28 * scale)
+    local previewX = x + width - previewWidth - (14 * scale)
+    local previewY = y + (14 * scale)
+    local chipLabel = Menu.OpenedCategory and "ACTIVE MODULE" or "MAIN MENU"
+    local chipPadding = 12 * scale
+    local chipWidth = Menu.GetTextWidth(chipLabel, 10, "mono") + (chipPadding * 2)
+    local chipX = previewX + previewWidth - chipWidth - (10 * scale)
+    local chipY = previewY + (8 * scale)
+    local previewTitle = string.upper(GetCurrentMenuContext())
 
-    DrawPanelSurface(x, y, width, headerHeight, radius, 1.0, {
-        bgAlpha = 0.97,
-        borderAlpha = 0.60
+    DrawPanelSurface(x, y, width, height, headerRadius, 1.0, {
+        bgAlpha = 0.98,
+        borderAlpha = 0.48,
+        shadowAlpha = 0.20,
+        accentLine = false
     })
 
-    local badgeSize = 40 * scale
-    local badgeX = x + (16 * scale)
-    local badgeY = y + (16 * scale)
     if Susano and Susano.DrawRectGradient then
-        Susano.DrawRectGradient(badgeX, badgeY, badgeSize, badgeSize,
-            chrome.accentR, chrome.accentG, chrome.accentB, 0.94,
-            chrome.accentR * 0.70, chrome.accentG * 0.70, chrome.accentB * 0.70, 0.94,
-            chrome.accentR * 0.58, chrome.accentG * 0.58, chrome.accentB * 0.58, 0.94,
-            chrome.accentR, chrome.accentG, chrome.accentB, 0.94,
-            9 * scale)
+        Susano.DrawRectGradient(x + 1, y + 1, width - 2, height - 2,
+            chrome.rowTopR, chrome.rowTopG, chrome.rowTopB, 0.22,
+            chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.06,
+            chrome.bodyBottomR, chrome.bodyBottomG, chrome.bodyBottomB, 0.02,
+            chrome.accentR * 0.32, chrome.accentG * 0.32, chrome.accentB * 0.32, 0.18,
+            headerRadius)
+    end
+
+    if Susano and Susano.DrawCircle then
+        Susano.DrawCircle(x + width - (44 * scale), y + (18 * scale), 46 * scale, true,
+            chrome.accentR, chrome.accentG, chrome.accentB, 0.08, 1.0, 32)
+        Susano.DrawCircle(x + width - (26 * scale), y + height - (18 * scale), 34 * scale, true,
+            chrome.accentR, chrome.accentG, chrome.accentB, 0.05, 1.0, 28)
+    end
+
+    if Susano and Susano.DrawRectGradient then
+        Susano.DrawRectGradient(iconX, iconY, iconSize, iconSize,
+            chrome.accentR, chrome.accentG, chrome.accentB, 0.98,
+            chrome.accentR * 0.78, chrome.accentG * 0.78, chrome.accentB * 0.78, 0.98,
+            chrome.accentR * 0.58, chrome.accentG * 0.58, chrome.accentB * 0.58, 0.98,
+            chrome.accentR, chrome.accentG, chrome.accentB, 0.98,
+            8 * scale)
     elseif Susano and Susano.DrawRectFilled then
-        Susano.DrawRectFilled(badgeX, badgeY, badgeSize, badgeSize, chrome.accentR, chrome.accentG, chrome.accentB, 0.94, 9 * scale)
+        Susano.DrawRectFilled(iconX, iconY, iconSize, iconSize, chrome.accentR, chrome.accentG, chrome.accentB, 0.96, 8 * scale)
     else
-        Menu.DrawRoundedRect(badgeX, badgeY, badgeSize, badgeSize,
-            math.floor(chrome.accentR * 255), math.floor(chrome.accentG * 255), math.floor(chrome.accentB * 255), 240, 9 * scale)
-    end
-    Menu.DrawTextEmphasis(badgeX + (10 * scale), badgeY + (6 * scale), "A", 22, 0.03, 0.06, 0.10, 1.0)
-
-    local titleX = badgeX + badgeSize + (14 * scale)
-    local titleY = y + (18 * scale)
-    Menu.DrawTextEmphasis(titleX, titleY, "Arcane", 28, 1.0, 1.0, 1.0, 1.0)
-    Menu.DrawText(titleX + (1 * scale), titleY + (28 * scale), "CONTROL SUITE", 11,
-        chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.96)
-
-    local stateLabel = "MAIN MENU"
-    if Menu.OpenedCategory and Menu.Categories and Menu.Categories[Menu.OpenedCategory] then
-        stateLabel = string.upper(tostring(Menu.Categories[Menu.OpenedCategory].name or stateLabel))
-    end
-    local stateWidth = Menu.GetTextWidth(stateLabel, 11)
-    local stateBadgeWidth = math.max((68 * scale), stateWidth + (18 * scale))
-    local stateX = x + width - stateBadgeWidth - (16 * scale)
-    local stateY = y + (18 * scale)
-    if Susano and Susano.DrawRectFilled then
-        Susano.DrawRectFilled(stateX, stateY, stateBadgeWidth, 18 * scale, 0.08, 0.11, 0.15, 0.88, 9 * scale)
-    else
-        Menu.DrawRoundedRect(stateX, stateY, stateBadgeWidth, 18 * scale, 20, 28, 38, 224, 9 * scale)
-    end
-    Menu.DrawText(stateX + (stateBadgeWidth / 2) - (stateWidth / 2), stateY + (2 * scale), stateLabel, 11, 1.0, 1.0, 1.0, 0.96)
-
-    if Menu.bannerTexture and Menu.bannerTexture > 0 and Susano and Susano.DrawImage then
-        local artWidth = math.min(width * 0.30, 124 * scale)
-        local artHeight = headerHeight - (26 * scale)
-        local artX = x + width - artWidth - (16 * scale)
-        local artY = y + (12 * scale)
-        Susano.DrawImage(Menu.bannerTexture, artX, artY, artWidth, artHeight, 1.0, 1.0, 1.0, 0.18, 8 * scale)
+        Menu.DrawRoundedRect(iconX, iconY, iconSize, iconSize,
+            math.floor(chrome.accentR * 255), math.floor(chrome.accentG * 255), math.floor(chrome.accentB * 255), 246, 8 * scale)
     end
 
-    DrawAccentRule(x + 1, y + headerHeight - (4 * scale), width - 2, math.max(2, 3 * scale), 1.0, 0)
+    local iconLetter = "A"
+    local iconLetterWidth = Menu.GetTextWidth(iconLetter, 22, "display")
+    Menu.DrawTextEmphasis(iconX + (iconSize / 2) - (iconLetterWidth / 2), iconY + (10 * scale), iconLetter, 22, 0.06, 0.09, 0.12, 1.0, "display")
+    Menu.DrawTextEmphasis(brandX, titleY, "Arcane", 24, 1.0, 1.0, 1.0, 1.0, "display")
+    Menu.DrawText(brandX, subtitleY, "CONTROL SUITE", 11, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.92, "strong")
+
+    DrawPanelSurface(previewX, previewY, previewWidth, previewHeight, 9 * scale, 1.0, {
+        bgAlpha = 0.72,
+        borderAlpha = 0.24,
+        shadowAlpha = 0.12,
+        accentLine = false
+    })
+
+    if Menu.Banner.enabled and Menu.bannerTexture and Menu.bannerTexture > 0 and Susano and Susano.DrawImage then
+        Susano.DrawImage(Menu.bannerTexture, previewX + 1, previewY + 1, previewWidth - 2, previewHeight - 2, 1.0, 1.0, 1.0, 0.18, 9 * scale)
+    end
+
+    if Susano and Susano.DrawRectGradient then
+        Susano.DrawRectGradient(previewX + 1, previewY + 1, previewWidth - 2, previewHeight - 2,
+            chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.78,
+            chrome.bodyBottomR, chrome.bodyBottomG, chrome.bodyBottomB, 0.46,
+            chrome.bodyBottomR, chrome.bodyBottomG, chrome.bodyBottomB, 0.74,
+            chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.92,
+            9 * scale)
+    end
+
+    DrawKeyBadge(chipLabel, chipX + chipWidth, chipY + (9 * scale), true, true, 0.94, 10)
+    local previewBadgeX = previewX + (14 * scale)
+    local previewBadgeY = previewY + previewHeight - (29 * scale)
+    local previewWordmark = Menu.OpenedCategory and string.upper(GetCurrentMenuTitle()) or "ARCANE MENU"
+    if #previewWordmark > 13 then
+        previewWordmark = string.sub(previewWordmark, 1, 11) .. ".."
+    end
+    if #previewTitle > 16 then
+        previewTitle = string.sub(previewTitle, 1, 14) .. ".."
+    end
+    Menu.DrawTextEmphasis(previewBadgeX, previewY + (15 * scale), "AS", 22, 0.42, 0.64, 0.78, 0.94, "display")
+    Menu.DrawText(previewBadgeX + (34 * scale), previewY + (20 * scale), previewWordmark, 10, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.88, "mono")
+    Menu.DrawText(previewBadgeX, previewBadgeY, previewTitle, 10, 1.0, 1.0, 1.0, 0.92, "mono")
+
+    DrawAccentRule(x, y, width, math.max(2, 2 * scale), 1.0, 0)
+    DrawAccentRule(x, y + height - (3 * scale), width, math.max(2, 3 * scale), 0.94, 0)
 end
 
 function Menu.DrawScrollbar(x, startY, visibleHeight, selectedIndex, totalItems, isMainMenu, menuWidth)
@@ -1124,9 +1318,9 @@ function Menu.DrawScrollbar(x, startY, visibleHeight, selectedIndex, totalItems,
 
     local scrollbarX
     if Menu.ScrollbarPosition == 2 then
-        scrollbarX = x + width + scrollbarPadding
+        scrollbarX = x + width - scrollbarWidth - scrollbarPadding
     else
-        scrollbarX = x - scrollbarWidth - scrollbarPadding
+        scrollbarX = x + scrollbarPadding
     end
 
     local scrollbarY = startY
@@ -1183,7 +1377,8 @@ function Menu.DrawScrollbar(x, startY, visibleHeight, selectedIndex, totalItems,
 
     if Susano and Susano.DrawRectFilled then
         local trackX = scrollbarX + (scrollbarWidth / 2) - 1
-        Susano.DrawRectFilled(trackX, scrollbarY, 2, scrollbarHeight, 1.0, 1.0, 1.0, 0.08, 1)
+        Susano.DrawRectFilled(scrollbarX, scrollbarY, scrollbarWidth, scrollbarHeight, 0.03, 0.05, 0.07, 0.62, scrollbarWidth / 2)
+        Susano.DrawRectFilled(trackX, scrollbarY + (3 * scale), 2, math.max(0, scrollbarHeight - (6 * scale)), 1.0, 1.0, 1.0, 0.06, 1)
         Susano.DrawRectFilled(scrollbarX, Menu.scrollbarY, scrollbarWidth, Menu.scrollbarHeight,
             0.04, 0.06, 0.09, 0.88,
             scrollbarWidth / 2)
@@ -1215,7 +1410,16 @@ function Menu.DrawTabs(category, x, startY, width, tabHeight)
     local chrome = GetMenuChromeColors()
 
     if Susano and Susano.DrawRectFilled then
-        Susano.DrawRectFilled(x, startY, width, tabHeight, 0.03, 0.04, 0.06, 0.92, 7 * scale)
+        if Susano and Susano.DrawRectGradient then
+            Susano.DrawRectGradient(x, startY, width, tabHeight,
+                chrome.rowTopR, chrome.rowTopG, chrome.rowTopB, 0.90,
+                chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.94,
+                chrome.bodyBottomR, chrome.bodyBottomG, chrome.bodyBottomB, 0.94,
+                chrome.rowBottomR, chrome.rowBottomG, chrome.rowBottomB, 0.90,
+                8 * scale)
+        else
+            Susano.DrawRectFilled(x, startY, width, tabHeight, 0.03, 0.04, 0.06, 0.92, 7 * scale)
+        end
     else
         Menu.DrawRoundedRect(x, startY, width, tabHeight, 8, 10, 14, 234, 7 * scale)
     end
@@ -1253,10 +1457,10 @@ function Menu.DrawTabs(category, x, startY, width, tabHeight)
             local drawWidth = Menu.TabSelectorWidth
             if Susano and Susano.DrawRectGradient then
                 Susano.DrawRectGradient(drawX, startY, drawWidth, tabHeight,
-                    chrome.accentR, chrome.accentG, chrome.accentB, 0.86,
-                    chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.96,
-                    chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.96,
-                    chrome.accentR, chrome.accentG, chrome.accentB, 0.78,
+                    chrome.accentR, chrome.accentG, chrome.accentB, 0.42,
+                    chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.98,
+                    chrome.bodyBottomR, chrome.bodyBottomG, chrome.bodyBottomB, 0.98,
+                    chrome.accentR, chrome.accentG, chrome.accentB, 0.32,
                     7 * scale)
             elseif Susano and Susano.DrawRectFilled then
                 Susano.DrawRectFilled(drawX, startY, drawWidth, tabHeight, chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.96, 7 * scale)
@@ -1379,7 +1583,11 @@ function Menu.DrawItem(x, itemY, width, itemHeight, item, isSelected)
     local textX = x + (18 * scale)
     local textY = itemY + itemHeight / 2 - (8 * scale)
     local textSize = 17 * scale
-    Menu.DrawText(textX, textY, item.name, 17, 1.0, 1.0, 1.0, 1.0)
+    if isSelected then
+        Menu.DrawTextEmphasis(textX, textY, item.name, 17, 1.0, 1.0, 1.0, 1.0, "strong")
+    else
+        Menu.DrawText(textX, textY, item.name, 17, 1.0, 1.0, 1.0, 0.98, "body")
+    end
 
     local actionBadgeWidth = 0
     if item.type == "action" and item.bindKeyName then
@@ -1662,11 +1870,11 @@ function Menu.DrawItem(x, itemY, width, itemHeight, item, isSelected)
                 Menu.Colors.TextWhite.r / 255.0 * 0.8, Menu.Colors.TextWhite.g / 255.0 * 0.8, Menu.Colors.TextWhite.b / 255.0 * 0.8, 0.8)
         end
     elseif item.type == "action" then
-        local chevronX = x + width - (18 * scale)
+        local chevronX = x + width - (26 * scale)
         if actionBadgeWidth > 0 then
             chevronX = chevronX - actionBadgeWidth - (10 * scale)
         end
-        Menu.DrawText(chevronX, textY, ">", 17, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.94)
+        Menu.DrawText(chevronX, textY, ">", 17, isSelected and 1.0 or chrome.textDimR, isSelected and 1.0 or chrome.textDimG, isSelected and 1.0 or chrome.textDimB, 0.94, "strong")
     end
 end
 
@@ -1797,27 +2005,26 @@ function Menu.DrawCategories()
             
             local text = tab.name
             local textSize = 16
-            local textWidth = Menu.GetTextWidth(text, textSize)
+            local textWidth = Menu.GetTextWidth(text, textSize, isSelected and "strong" or "body")
             
             local textX = tabX + (tabWidth / 2) - (textWidth / 2)
             local textY = itemY + mainMenuHeight / 2 - 7
             
             if isSelected then
-                Menu.DrawTextEmphasis(textX, textY, text, textSize, 1.0, 1.0, 1.0, 0.98)
+                Menu.DrawTextEmphasis(textX, textY, text, textSize, 1.0, 1.0, 1.0, 0.98, "strong")
             else
-                Menu.DrawText(textX, textY, text, textSize, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.84)
+                Menu.DrawText(textX, textY, text, textSize, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.84, "body")
             end
         end
     else
         local labelText = Menu.Categories[1] and Menu.Categories[1].name or "Main Menu"
         local textY = itemY + mainMenuHeight / 2 - 7
-        local estimatedTextWidth = Menu.GetTextWidth(labelText, 16)
         local textX = x + (16 * scale)
-        Menu.DrawTextEmphasis(textX, textY, labelText, 16, 1.0, 1.0, 1.0, 0.98)
+        Menu.DrawTextEmphasis(textX, textY, labelText, 16, 1.0, 1.0, 1.0, 0.98, "strong")
         local helperText = "Navigation"
-        local helperWidth = Menu.GetTextWidth(helperText, 11)
+        local helperWidth = Menu.GetTextWidth(helperText, 11, "mono")
         local helperX = x + width - helperWidth - (14 * scale)
-        Menu.DrawText(helperX, itemY + (mainMenuHeight / 2) - (5 * scale), helperText, 11, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.84)
+        Menu.DrawText(helperX, itemY + (mainMenuHeight / 2) - (5 * scale), helperText, 11, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.84, "mono")
     end
 
     local actualVisibleCount = 0
@@ -1850,10 +2057,14 @@ function Menu.DrawCategories()
             local tokenWidth = DrawKeyBadge(token, x + (16 * scale), itemY + (itemHeight / 2), false, isSelected, 0.96, 10)
             local textX = x + (16 * scale) + tokenWidth + (10 * scale)
             local textY = itemY + itemHeight / 2 - (8 * scale)
-            Menu.DrawText(textX, textY, category.name, 17, 1.0, 1.0, 1.0, 1.0)
+            if isSelected then
+                Menu.DrawTextEmphasis(textX, textY, category.name, 17, 1.0, 1.0, 1.0, 1.0, "strong")
+            else
+                Menu.DrawText(textX, textY, category.name, 17, 1.0, 1.0, 1.0, 0.98, "body")
+            end
 
-            local chevronX = x + width - (20 * scale)
-            Menu.DrawText(chevronX, textY, ">", 17, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.94)
+            local chevronX = x + width - (26 * scale)
+            Menu.DrawText(chevronX, textY, ">", 17, isSelected and 1.0 or chrome.textDimR, isSelected and 1.0 or chrome.textDimG, isSelected and 1.0 or chrome.textDimB, 0.94, "strong")
         end
     end
 
@@ -2066,9 +2277,9 @@ function Menu.DrawFooter()
     })
 
     local footerPadding = 14 * scale
-    local footerLabel = "arcane.services"
+    local footerLabel = string.lower(GetFooterIdentityText()) .. " | " .. string.lower(GetCurrentMenuContext())
     local footerLabelY = footerY + (7 * scale)
-    Menu.DrawText( x + footerPadding, footerLabelY, footerLabel, 11, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.92)
+    Menu.DrawText(x + footerPadding, footerLabelY, footerLabel, 10, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.92, "mono")
 
     local displayIndex
     local totalItems
@@ -2099,9 +2310,9 @@ function Menu.DrawFooter()
 
     local hintY = footerY + footerHeight - (18 * scale)
     local prefix = "Press"
-    local prefixWidth = Menu.GetTextWidth(prefix, 12)
+    local prefixWidth = Menu.GetTextWidth(prefix, 12, "strong")
     local prefixX = x + footerPadding
-    Menu.DrawText(prefixX, hintY, prefix, 12, 1.0, 1.0, 1.0, 0.96)
+    Menu.DrawText(prefixX, hintY, prefix, 12, 1.0, 1.0, 1.0, 0.96, "strong")
 
     local bindKeyLabel = Menu.BindShortcutLabel or Menu.GetKeyName(Menu.BindShortcutKey or 0x79)
     local badgeAnchorX = prefixX + prefixWidth + (10 * scale)
@@ -2109,7 +2320,7 @@ function Menu.DrawFooter()
 
     local suffixText = GetBindHintText()
     local suffixX = badgeAnchorX + badgeWidth + (10 * scale)
-    Menu.DrawText(suffixX, hintY, suffixText, 12, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.94)
+    Menu.DrawText(suffixX, hintY, suffixText, 12, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.94, "body")
 end
 
 function Menu.DrawKeySelector(alpha)
@@ -2122,54 +2333,89 @@ function Menu.DrawKeySelector(alpha)
         screenHeight = Susano.GetScreenHeight()
     end
 
-    local padding = 15
-    local cornerRadius = 10
-    local barHeight = 3
-    local lineHeight = 30
-    local textSize = 14
-    local headerHeight = 46
+    local scale = Menu.Scale or 1.0
+    local padding = 18 * scale
+    local cornerRadius = 12 * scale
+    local barHeight = 3 * scale
+    local textSize = 13
+    local headerHeight = 44 * scale
 
-    local width = 410
+    local width = 430 * scale
     local startX = math.floor((screenWidth - width) / 2)
-    local startY = math.floor(screenHeight - 178)
+    local startY = math.floor(screenHeight - (194 * scale))
 
     local itemName = Menu.BindingItem and (Menu.BindingItem.name or "Option") or "Menu Toggle"
     local keyName = Menu.BindingItem and Menu.BindingKeyName or Menu.SelectedKeyName
     if not keyName then keyName = "..." end
-    local totalHeight = headerHeight + barHeight + padding + lineHeight + 34
+    local totalHeight = (146 * scale)
     local chrome = GetMenuChromeColors()
+    local cardX = startX + padding
+    local cardY = startY + headerHeight + (10 * scale)
+    local cardWidth = width - (padding * 2)
+    local cardHeight = 44 * scale
 
     DrawPanelSurface(startX, startY, width, totalHeight, cornerRadius, alpha, {
         bgAlpha = 0.98 * alpha,
         borderAlpha = 0.66 * alpha
     })
 
+    if Susano and Susano.DrawRectGradient then
+        Susano.DrawRectGradient(startX + 1, startY + 1, width - 2, headerHeight,
+            chrome.rowTopR, chrome.rowTopG, chrome.rowTopB, 0.92 * alpha,
+            chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.82 * alpha,
+            chrome.bodyTopR, chrome.bodyTopG, chrome.bodyTopB, 0.76 * alpha,
+            chrome.accentR * 0.34, chrome.accentG * 0.34, chrome.accentB * 0.34, 0.18 * alpha,
+            cornerRadius)
+    end
+
     local title = "KEYBIND CAPTURE"
     local titleX = startX + padding
-    local titleY = startY + padding - 2
-    Menu.DrawTextEmphasis(titleX, titleY, title, textSize, 1.0, 1.0, 1.0, 1.0 * alpha)
+    local titleY = startY + (13 * scale)
+    Menu.DrawTextEmphasis(titleX, titleY, title, textSize, 1.0, 1.0, 1.0, 1.0 * alpha, "mono")
+
+    local stepText = "PRESS A KEY AND CONFIRM WITH ENTER"
+    local stepTextSize = 10
+    local stepTextWidth = Menu.GetTextWidth(stepText, stepTextSize, "mono")
+    Menu.DrawText(startX + width - stepTextWidth - padding, titleY + (1 * scale), stepText, stepTextSize, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.92 * alpha, "mono")
 
     local barY = startY + headerHeight
-    local barLabel = "Press a key, then Enter"
-    local barLabelSize = 12
-    local barLabelW = Menu.GetTextWidth(barLabel, barLabelSize)
-    local barLabelX = startX + (width / 2) - (barLabelW / 2)
-    local barLabelY = barY - barLabelSize - 5
-    Menu.DrawText(barLabelX, barLabelY, barLabel, barLabelSize, chrome.textDimR, chrome.textDimG, chrome.textDimB, 1.0 * alpha)
-
     DrawAccentRule(startX + padding, barY, width - (padding * 2), barHeight, alpha, 0)
 
-    local rowY = barY + barHeight + padding
-    local labelY = rowY + 1
-    Menu.DrawTextEmphasis(startX + padding, labelY, itemName, 14, 1.0, 1.0, 1.0, 1.0 * alpha)
-    Menu.DrawText(startX + padding, labelY + 17, "Selected key", 11, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.94 * alpha)
+    DrawPanelSurface(cardX, cardY, cardWidth, cardHeight, 9 * scale, alpha, {
+        bgAlpha = 0.62 * alpha,
+        borderAlpha = 0.22 * alpha,
+        shadowAlpha = 0.08 * alpha,
+        accentLine = false
+    })
 
-    local keyBadgeCenterY = rowY + 18
-    DrawKeyBadge(keyName, startX + width - padding - 8, keyBadgeCenterY, true, true, alpha, 13)
+    local iconBoxSize = 26 * scale
+    local iconBoxX = cardX + (10 * scale)
+    local iconBoxY = cardY + (cardHeight / 2) - (iconBoxSize / 2)
+    if Susano and Susano.DrawRectGradient then
+        Susano.DrawRectGradient(iconBoxX, iconBoxY, iconBoxSize, iconBoxSize,
+            chrome.accentR, chrome.accentG, chrome.accentB, 0.96 * alpha,
+            chrome.accentR * 0.72, chrome.accentG * 0.72, chrome.accentB * 0.72, 0.96 * alpha,
+            chrome.accentR * 0.52, chrome.accentG * 0.52, chrome.accentB * 0.52, 0.96 * alpha,
+            chrome.accentR, chrome.accentG, chrome.accentB, 0.96 * alpha,
+            6 * scale)
+    elseif Susano and Susano.DrawRectFilled then
+        Susano.DrawRectFilled(iconBoxX, iconBoxY, iconBoxSize, iconBoxSize, chrome.accentR, chrome.accentG, chrome.accentB, 0.94 * alpha, 6 * scale)
+    end
 
-    local helperY = startY + totalHeight - 26
-    local helperText = "ESC and Backspace can still be assigned."
-    Menu.DrawText(startX + padding, helperY, helperText, 11, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.84 * alpha)
+    local iconText = ">"
+    local iconTextWidth = Menu.GetTextWidth(iconText, 14, "strong")
+    Menu.DrawTextEmphasis(iconBoxX + (iconBoxSize / 2) - (iconTextWidth / 2), iconBoxY + (4 * scale), iconText, 14, 0.06, 0.08, 0.12, 1.0 * alpha, "strong")
+
+    local labelY = cardY + (8 * scale)
+    Menu.DrawTextEmphasis(cardX + (iconBoxSize + 22 * scale), labelY, itemName, 14, 1.0, 1.0, 1.0, 1.0 * alpha, "strong")
+    Menu.DrawText(cardX + (iconBoxSize + 22 * scale), labelY + (17 * scale), "Selected key", 11, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.94 * alpha, "body")
+
+    local keyBadgeCenterY = cardY + (cardHeight / 2)
+    DrawKeyBadge(keyName, startX + width - padding - 8, keyBadgeCenterY, true, true, alpha, 14)
+
+    local helperY = startY + totalHeight - (28 * scale)
+    local helperText = "ESC, BACKSPACE AND FUNCTION KEYS CAN STILL BE ASSIGNED."
+    Menu.DrawText(startX + padding, helperY, helperText, 10, chrome.textDimR, chrome.textDimG, chrome.textDimB, 0.84 * alpha, "mono")
 end
 
 local function clampNumber(value, minValue, maxValue)
@@ -2684,6 +2930,7 @@ function Menu.DrawBackground()
     local contentY = startY + headerH
     local contentEndY = footerSegment and (footerSegment.y + footerSegment.h) or (startY + fullHeight)
     local contentHeight = math.max(0, contentEndY - contentY)
+    local totalMenuHeight = math.max(0, contentEndY - y)
 
     local blackBackgroundItem = nil
     if Menu.Categories then
@@ -2703,6 +2950,11 @@ function Menu.DrawBackground()
             end
             if blackBackgroundItem then break end
         end
+    end
+
+    if totalMenuHeight > 0 and Susano and Susano.DrawRectFilled then
+        Susano.DrawRectFilled(x + (8 * scale), y + (10 * scale), width, totalMenuHeight, 0.0, 0.0, 0.0, 0.18, 14 * scale)
+        Susano.DrawRectFilled(x + (3 * scale), y + (4 * scale), width, totalMenuHeight, 0.0, 0.0, 0.0, 0.10, 14 * scale)
     end
 
     local bgAlpha = (blackBackgroundItem and blackBackgroundItem.value == false) and 0.68 or 0.92
@@ -2741,6 +2993,8 @@ function Menu.Render()
     if not (Susano and Susano.BeginFrame) then
         return
     end
+
+    Menu.EnsureFontsLoaded()
 
     local dt = 0.016
     if GetFrameTime then
