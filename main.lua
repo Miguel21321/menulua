@@ -57,6 +57,9 @@ Menu.SpectatorPanelOffsetX = 0
 Menu.SpectatorPanelOffsetY = 0
 Menu.KeybindsPositionMode = false
 Menu.SpectatorPositionMode = false
+Menu.BindShortcutKey = 0x79
+Menu.BindShortcutLabel = "F10"
+Menu.SuppressCaptureUntilRelease = nil
 
 
 Menu.CurrentTopTab = 1
@@ -495,6 +498,14 @@ local function SetInteractiveOverlayState(enable)
     if Susano and Susano.EnableOverlay then
         Susano.EnableOverlay(desiredState)
     end
+end
+
+local function IsInteractiveOverlayActive()
+    return (Menu.Visible and Menu.ClickableMenu)
+        or Menu.EditorMode
+        or Menu.SelectingBind
+        or Menu.SelectingKey
+        or Menu.InputOpen
 end
 
 local DrawClickableCursor
@@ -2087,6 +2098,11 @@ function Menu.DrawFooter()
 
     local posX = x + footerWidth - posWidth - footerPadding
     Menu.DrawText(posX, footerTextY, posText, footerSize, Menu.Colors.TextWhite.r / 255.0, Menu.Colors.TextWhite.g / 255.0, Menu.Colors.TextWhite.b / 255.0, 1.0)
+
+    local bindHint = tostring(Menu.BindShortcutLabel or Menu.GetKeyName(Menu.BindShortcutKey or 0x79)) .. " Keybind"
+    local bindHintWidth = Menu.GetTextWidth(bindHint, 12)
+    local bindHintX = x + (footerWidth / 2) - (bindHintWidth / 2)
+    Menu.DrawText(bindHintX, footerTextY, bindHint, 12, Menu.Colors.TextWhite.r / 255.0, Menu.Colors.TextWhite.g / 255.0, Menu.Colors.TextWhite.b / 255.0, 0.75)
 end
 
 function Menu.DrawKeySelector(alpha)
@@ -2885,8 +2901,7 @@ function Menu.Render()
         Menu.SpectatorListAlpha = math.max(0.0, Menu.SpectatorListAlpha - animSpeed)
     end
 
-    local useInteractiveOverlay = (Menu.Visible and Menu.ClickableMenu) or Menu.EditorMode
-    SetInteractiveOverlayState(useInteractiveOverlay == true)
+    SetInteractiveOverlayState(IsInteractiveOverlayActive())
 
     Susano.BeginFrame()
 
@@ -3049,14 +3064,24 @@ function Menu.CaptureBindableKey()
             local down, pressed = Menu.GetKeyState(keyCode)
             local wasDown = Menu.KeyStates[keyCode] or false
 
-            if down == true then
-                Menu.KeyStates[keyCode] = true
+            if Menu.SuppressCaptureUntilRelease == keyCode then
+                if down == true then
+                    Menu.KeyStates[keyCode] = true
+                else
+                    Menu.KeyStates[keyCode] = false
+                    Menu.SuppressCaptureUntilRelease = nil
+                end
             else
-                Menu.KeyStates[keyCode] = false
-            end
 
-            if pressed == true or (down == true and not wasDown) then
-                return keyCode
+                if down == true then
+                    Menu.KeyStates[keyCode] = true
+                else
+                    Menu.KeyStates[keyCode] = false
+                end
+
+                if pressed == true or (down == true and not wasDown) then
+                    return keyCode
+                end
             end
         end
     end
@@ -3083,7 +3108,7 @@ function Menu.ApplySpecialToggleState(item)
         Menu.ShowSpectatorList = item.value == true
     end
 
-    SetInteractiveOverlayState((Menu.Visible and Menu.ClickableMenu) or Menu.EditorMode)
+    SetInteractiveOverlayState(IsInteractiveOverlayActive())
 end
 
 local function IsPointInRect(px, py, x, y, width, height)
@@ -3168,7 +3193,11 @@ local function GetOverlayMouseState()
 end
 
 DrawClickableCursor = function()
-    if not Menu.Visible or not (Menu.ClickableMenu or Menu.EditorMode) or not Susano or not Susano.GetCursorPos then
+    if not Susano or not Susano.GetCursorPos or not IsInteractiveOverlayActive() then
+        return
+    end
+
+    if not Menu.Visible and not Menu.InputOpen and not Menu.SelectingBind and not Menu.SelectingKey then
         return
     end
 
@@ -3961,7 +3990,8 @@ function Menu.HandleInput()
                 local backDown, backPressed = Susano.GetAsyncKeyState(0x08)
                 local leftDown, leftPressed = Susano.GetAsyncKeyState(0x25)
                 local rightDown, rightPressed = Susano.GetAsyncKeyState(0x27)
-                local f9Down, f9Pressed = Susano.GetAsyncKeyState(0x78)
+                local bindShortcutCode = Menu.BindShortcutKey or 0x79
+                local bindDown, bindPressed = Susano.GetAsyncKeyState(bindShortcutCode)
 
                 local upWasDown = Menu.KeyStates[0x26] or false
                 local downWasDown = Menu.KeyStates[0x28] or false
@@ -3970,7 +4000,7 @@ function Menu.HandleInput()
                 local backWasDown = Menu.KeyStates[0x08] or false
                 local leftWasDown = Menu.KeyStates[0x25] or false
                 local rightWasDown = Menu.KeyStates[0x27] or false
-                local f9WasDown = Menu.KeyStates[0x78] or false
+                local bindWasDown = Menu.KeyStates[bindShortcutCode] or false
 
                 if upDown == true then Menu.KeyStates[0x26] = true else Menu.KeyStates[0x26] = false end
                 if downDown == true then Menu.KeyStates[0x28] = true else Menu.KeyStates[0x28] = false end
@@ -3979,9 +4009,9 @@ function Menu.HandleInput()
                 if backDown == true then Menu.KeyStates[0x08] = true else Menu.KeyStates[0x08] = false end
                 if leftDown == true then Menu.KeyStates[0x25] = true else Menu.KeyStates[0x25] = false end
                 if rightDown == true then Menu.KeyStates[0x27] = true else Menu.KeyStates[0x27] = false end
-                if f9Down == true then Menu.KeyStates[0x78] = true else Menu.KeyStates[0x78] = false end
+                if bindDown == true then Menu.KeyStates[bindShortcutCode] = true else Menu.KeyStates[bindShortcutCode] = false end
 
-                if (f9Pressed == true) or (f9Down == true and not f9WasDown) then
+                if (bindPressed == true) or (bindDown == true and not bindWasDown) then
                     if Menu.CurrentItem > 0 and Menu.CurrentItem <= #currentTab.items then
                         local selectedItem = currentTab.items[Menu.CurrentItem]
                         if selectedItem and not selectedItem.isSeparator then
@@ -3989,6 +4019,7 @@ function Menu.HandleInput()
                             Menu.BindingItem = selectedItem
                             Menu.BindingKey = nil
                             Menu.BindingKeyName = nil
+                            Menu.SuppressCaptureUntilRelease = bindShortcutCode
                             if not selectedItem.bindKey then
                                 selectedItem.bindKey = nil
                                 selectedItem.bindKeyName = nil
