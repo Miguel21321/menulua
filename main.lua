@@ -3192,6 +3192,76 @@ local function GetOverlayMouseState()
         (rightDown == true or rightDown == 1), rightPressed == true
 end
 
+local function GetClickableCursorAccentColor()
+    local base = (Menu and Menu.Colors and Menu.Colors.SelectedBg) or { r = 0, g = 221, b = 255 }
+    local r = tonumber(base.r) or 0
+    local g = tonumber(base.g) or 0
+    local b = tonumber(base.b) or 0
+
+    if r > 1.0 then r = r / 255.0 end
+    if g > 1.0 then g = g / 255.0 end
+    if b > 1.0 then b = b / 255.0 end
+
+    return math.max(0.0, math.min(1.0, r)),
+        math.max(0.0, math.min(1.0, g)),
+        math.max(0.0, math.min(1.0, b))
+end
+
+local function DrawClickableCursorLine(x1, y1, x2, y2, r, g, b, a, thickness)
+    if Susano and Susano.DrawLine then
+        Susano.DrawLine(x1, y1, x2, y2, r, g, b, a, thickness)
+    elseif Susano and Susano.DrawRectFilled then
+        local minX = math.min(x1, x2)
+        local minY = math.min(y1, y2)
+        local width = math.max(1, math.abs(x2 - x1))
+        local height = math.max(1, math.abs(y2 - y1))
+        Susano.DrawRectFilled(minX, minY, width, height, r, g, b, a, 1)
+    end
+end
+
+local function DrawPointerCursor(mouseX, mouseY, pressed)
+    local accentR, accentG, accentB = GetClickableCursorAccentColor()
+    local offsetX = pressed and -0.5 or 0.0
+    local offsetY = pressed and 0.5 or 0.0
+
+    local points = {
+        { x = mouseX + offsetX,      y = mouseY + offsetY },
+        { x = mouseX + offsetX,      y = mouseY + 18 + offsetY },
+        { x = mouseX + 4 + offsetX,  y = mouseY + 14 + offsetY },
+        { x = mouseX + 8 + offsetX,  y = mouseY + 24 + offsetY },
+        { x = mouseX + 12 + offsetX, y = mouseY + 22 + offsetY },
+        { x = mouseX + 8 + offsetX,  y = mouseY + 12 + offsetY },
+        { x = mouseX + 15 + offsetX, y = mouseY + 12 + offsetY }
+    }
+
+    for i = 1, #points do
+        local current = points[i]
+        local nextPoint = points[(i % #points) + 1]
+        DrawClickableCursorLine(current.x + 1.5, current.y + 1.5, nextPoint.x + 1.5, nextPoint.y + 1.5, 0.0, 0.0, 0.0, 0.45, 4.0)
+    end
+
+    for i = 1, #points do
+        local current = points[i]
+        local nextPoint = points[(i % #points) + 1]
+        DrawClickableCursorLine(current.x, current.y, nextPoint.x, nextPoint.y, 0.0, 0.0, 0.0, 1.0, 3.4)
+    end
+
+    for i = 1, #points do
+        local current = points[i]
+        local nextPoint = points[(i % #points) + 1]
+        DrawClickableCursorLine(current.x, current.y, nextPoint.x, nextPoint.y, 1.0, 1.0, 1.0, 1.0, 2.0)
+    end
+
+    DrawClickableCursorLine(mouseX + 4 + offsetX, mouseY + 14 + offsetY, mouseX + 9 + offsetX, mouseY + 22 + offsetY, accentR, accentG, accentB, 1.0, 2.1)
+    DrawClickableCursorLine(mouseX + 1 + offsetX, mouseY + 1 + offsetY, mouseX + 4 + offsetX, mouseY + 4 + offsetY, accentR, accentG, accentB, 0.90, 1.6)
+
+    if Susano and Susano.DrawCircle then
+        Susano.DrawCircle(mouseX + offsetX, mouseY + offsetY, pressed and 2.5 or 2.0, true, accentR, accentG, accentB, pressed and 0.95 or 0.75, 1.0, 18)
+    elseif Susano and Susano.DrawRectFilled then
+        Susano.DrawRectFilled(mouseX - 1 + offsetX, mouseY - 1 + offsetY, 3, 3, accentR, accentG, accentB, pressed and 0.95 or 0.75, 1)
+    end
+end
+
 DrawClickableCursor = function()
     if not Susano or not Susano.GetCursorPos or not IsInteractiveOverlayActive() then
         return
@@ -3201,25 +3271,22 @@ DrawClickableCursor = function()
         return
     end
 
-    local mouseX, mouseY = GetOverlayMouseState()
+    local mouseX, mouseY, leftDown = GetOverlayMouseState()
     if not mouseX or not mouseY then
         return
     end
 
-    local outer = 11
-    local inner = 7
-    local dot = 3
-
-    if Susano.DrawCircle then
-        Susano.DrawCircle(mouseX, mouseY, outer, false, 0.0, 0.0, 0.0, 0.95, 2.0, 26)
-        Susano.DrawCircle(mouseX, mouseY, inner, false, 1.0, 1.0, 1.0, 1.0, 1.0, 24)
-        Susano.DrawCircle(mouseX, mouseY, dot, true, 1.0, 0.25, 0.25, 1.0, 1.0, 18)
+    if Susano.DrawLine or Susano.DrawCircle then
+        DrawPointerCursor(mouseX, mouseY, leftDown == true)
     elseif Susano.DrawRectFilled then
-        Susano.DrawRectFilled(mouseX - 6, mouseY - 1, 12, 2, 0.0, 0.0, 0.0, 1.0, 1)
-        Susano.DrawRectFilled(mouseX - 1, mouseY - 6, 2, 12, 0.0, 0.0, 0.0, 1.0, 1)
-        Susano.DrawRectFilled(mouseX - 5, mouseY, 10, 1, 1.0, 1.0, 1.0, 1.0, 0)
-        Susano.DrawRectFilled(mouseX, mouseY - 5, 1, 10, 1.0, 1.0, 1.0, 1.0, 0)
-        Susano.DrawRectFilled(mouseX - 1, mouseY - 1, 2, 2, 1.0, 0.25, 0.25, 1.0, 1)
+        local accentR, accentG, accentB = GetClickableCursorAccentColor()
+        Susano.DrawRectFilled(mouseX + 1, mouseY + 2, 10, 16, 0.0, 0.0, 0.0, 0.40, 1)
+        Susano.DrawRectFilled(mouseX, mouseY, 2, 18, 1.0, 1.0, 1.0, 1.0, 1)
+        Susano.DrawRectFilled(mouseX + 2, mouseY + 4, 2, 14, 1.0, 1.0, 1.0, 1.0, 1)
+        Susano.DrawRectFilled(mouseX + 4, mouseY + 8, 2, 12, 1.0, 1.0, 1.0, 1.0, 1)
+        Susano.DrawRectFilled(mouseX + 6, mouseY + 11, 2, 10, 1.0, 1.0, 1.0, 1.0, 1)
+        Susano.DrawRectFilled(mouseX + 8, mouseY + 11, 7, 2, 1.0, 1.0, 1.0, 1.0, 1)
+        Susano.DrawRectFilled(mouseX + 5, mouseY + 14, 5, 2, accentR, accentG, accentB, 0.95, 1)
     end
 end
 
