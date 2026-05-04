@@ -52,6 +52,14 @@ Menu.ShowSpectatorList = false
 Menu.SpectatorEntries = {}
 Menu.SpectatorListAlpha = 0.0
 Menu.ClickableMenu = false
+Menu.DisplayMenu = false
+Menu.DisplayMenuHoverCategory = nil
+Menu.DisplayMenuHoverTab = nil
+Menu.DisplayMenuHoverItem = nil
+Menu.DisplayMenuActiveSlider = nil
+Menu.DisplayMenuLeftWasDown = false
+Menu.DisplayMenuRightWasDown = false
+Menu.DisplayMenuItemScrollOffset = 0
 Menu.MouseLeftWasDown = false
 Menu.MouseRightWasDown = false
 Menu.ActiveMouseSlider = nil
@@ -506,6 +514,7 @@ end
 
 local function IsInteractiveOverlayActive()
     return (Menu.Visible and Menu.ClickableMenu)
+        or (Menu.Visible and Menu.DisplayMenu)
         or Menu.EditorMode
         or Menu.KeybindsPositionMode
         or Menu.SpectatorPositionMode
@@ -2904,6 +2913,588 @@ function Menu.DrawBackground()
 end
 
 
+Menu.DisplayMenuLayout = {
+    width = 940,
+    height = 560,
+    sidebarWidth = 210,
+    headerHeight = 60,
+    tabBarHeight = 44,
+    itemHeight = 38,
+    padding = 18,
+    rowGap = 4,
+    itemsPerPage = 11
+}
+
+local function DM_DrawRect(x, y, w, h, r, g, b, a)
+    if not (Susano and (Susano.DrawRectFilled or Susano.DrawFilledRect)) then return end
+    r = r or 1.0; g = g or 1.0; b = b or 1.0; a = a or 1.0
+    if r > 1.0 then r = r / 255.0 end
+    if g > 1.0 then g = g / 255.0 end
+    if b > 1.0 then b = b / 255.0 end
+    if a > 1.0 then a = a / 255.0 end
+    if Susano.DrawRectFilled then
+        Susano.DrawRectFilled(x, y, w, h, r, g, b, a, 0)
+    else
+        Susano.DrawFilledRect(x, y, w, h, r, g, b, a)
+    end
+end
+
+local function DM_DrawTextSafe(x, y, text, size, r, g, b, a)
+    if Menu.DrawText then
+        Menu.DrawText(x, y, text, size, r, g, b, a)
+    elseif Susano and Susano.DrawText then
+        if r and r > 1.0 then r = r / 255.0 end
+        if g and g > 1.0 then g = g / 255.0 end
+        if b and b > 1.0 then b = b / 255.0 end
+        if a and a > 1.0 then a = a / 255.0 end
+        Susano.DrawText(x, y, tostring(text or ""), size or 16, r or 1, g or 1, b or 1, a or 1)
+    end
+end
+
+local function DM_GetAccent()
+    local base = (Menu and Menu.Colors and Menu.Colors.SelectedBg) or { r = 0, g = 221, b = 255 }
+    return base.r or 0, base.g or 221, base.b or 255
+end
+
+local function DM_GetRect()
+    local layout = Menu.DisplayMenuLayout
+    local screenW, screenH = MenuGetScreenSize()
+    local scale = Menu.Scale or 1.0
+    local maxW = math.floor(screenW * 0.92)
+    local maxH = math.floor(screenH * 0.88)
+    local w = math.min(math.floor(layout.width * scale), maxW)
+    local h = math.min(math.floor(layout.height * scale), maxH)
+    local x = math.floor((screenW - w) / 2)
+    local y = math.floor((screenH - h) / 2)
+    return x, y, w, h, scale
+end
+
+local function DM_GetSidebarRowRect(panelX, panelY, scale, index)
+    local layout = Menu.DisplayMenuLayout
+    local sidebarW = layout.sidebarWidth * scale
+    local headerH = layout.headerHeight * scale
+    local rowH = (layout.itemHeight + 2) * scale
+    local startY = panelY + headerH + (8 * scale)
+    local rowX = panelX + (8 * scale)
+    local rowY = startY + ((index - 1) * rowH)
+    local rowW = sidebarW - (16 * scale)
+    return rowX, rowY, rowW, rowH * 0.92
+end
+
+local function DM_GetTabRect(panelX, panelY, panelW, scale, index, totalTabs)
+    local layout = Menu.DisplayMenuLayout
+    local sidebarW = layout.sidebarWidth * scale
+    local headerH = layout.headerHeight * scale
+    local tabBarH = layout.tabBarHeight * scale
+    local contentX = panelX + sidebarW
+    local contentW = panelW - sidebarW
+    local tabAreaPad = 16 * scale
+    local availableW = contentW - (tabAreaPad * 2)
+    local tabW = availableW / math.max(1, totalTabs)
+    local tabX = contentX + tabAreaPad + ((index - 1) * tabW)
+    local tabY = panelY + headerH
+    return tabX, tabY, tabW, tabBarH
+end
+
+local function DM_GetItemAreaRect(panelX, panelY, panelW, panelH, scale)
+    local layout = Menu.DisplayMenuLayout
+    local sidebarW = layout.sidebarWidth * scale
+    local headerH = layout.headerHeight * scale
+    local tabBarH = layout.tabBarHeight * scale
+    local pad = 14 * scale
+    local x = panelX + sidebarW + pad
+    local y = panelY + headerH + tabBarH + pad
+    local w = panelW - sidebarW - (pad * 2)
+    local h = panelH - headerH - tabBarH - (pad * 2)
+    return x, y, w, h
+end
+
+local function DM_GetItemRowRect(itemAreaX, itemAreaY, itemAreaW, scale, displayIndex)
+    local layout = Menu.DisplayMenuLayout
+    local rowH = layout.itemHeight * scale
+    local gap = layout.rowGap * scale
+    local rowY = itemAreaY + ((displayIndex - 1) * (rowH + gap))
+    return itemAreaX, rowY, itemAreaW, rowH
+end
+
+local function DM_CountVisibleItems(items)
+    if not items then return 0 end
+    return #items
+end
+
+function Menu.DrawDisplayMenu()
+    if not Menu.Categories then return end
+    if not (Susano and Susano.DrawRectFilled) and not (Susano and Susano.DrawFilledRect) then return end
+
+    local panelX, panelY, panelW, panelH, scale = DM_GetRect()
+    local layout = Menu.DisplayMenuLayout
+    local sidebarW = layout.sidebarWidth * scale
+    local headerH = layout.headerHeight * scale
+    local tabBarH = layout.tabBarHeight * scale
+    local accentR, accentG, accentB = DM_GetAccent()
+
+    DM_DrawRect(panelX - 2, panelY - 2, panelW + 4, panelH + 4, 0, 0, 0, 200)
+    DM_DrawRect(panelX, panelY, panelW, panelH, 18, 19, 26, 245)
+    DM_DrawRect(panelX, panelY, sidebarW, panelH, 12, 13, 18, 255)
+    DM_DrawRect(panelX, panelY, panelW, headerH, 22, 24, 32, 255)
+    DM_DrawRect(panelX + sidebarW - 1, panelY, 1, panelH, 40, 42, 52, 220)
+    DM_DrawRect(panelX, panelY + headerH - 1, panelW, 1, 40, 42, 52, 220)
+
+    local titleY = panelY + math.floor(headerH / 2) - math.floor(11 * scale)
+    DM_DrawTextSafe(panelX + math.floor(18 * scale), titleY, "ARCANE", math.floor(20 * scale), accentR, accentG, accentB, 1.0)
+    DM_DrawTextSafe(panelX + math.floor(18 * scale) + Menu.GetTextWidth("ARCANE", math.floor(20 * scale)) + math.floor(6 * scale), titleY, "MENU", math.floor(20 * scale), 235, 235, 240, 1.0)
+
+    local rightLabel = "F10 Keybind  |  Mouse Mode"
+    local labelW = Menu.GetTextWidth(rightLabel, math.floor(13 * scale))
+    DM_DrawTextSafe(panelX + panelW - labelW - math.floor(18 * scale), titleY + math.floor(4 * scale), rightLabel, math.floor(13 * scale), 160, 165, 175, 1.0)
+
+    local totalCategories = (#Menu.Categories) - 1
+    local hoverCat = Menu.DisplayMenuHoverCategory
+    for displayIndex = 1, totalCategories do
+        local categoryIndex = displayIndex + 1
+        local category = Menu.Categories[categoryIndex]
+        if category then
+            local rx, ry, rw, rh = DM_GetSidebarRowRect(panelX, panelY, scale, displayIndex)
+            local isSelected = (Menu.OpenedCategory == categoryIndex) or (Menu.CurrentCategory == categoryIndex and not Menu.OpenedCategory)
+            local isHover = (hoverCat == displayIndex)
+
+            if isSelected then
+                DM_DrawRect(rx, ry, rw, rh, accentR, accentG, accentB, 38)
+                DM_DrawRect(rx, ry, math.max(2, math.floor(3 * scale)), rh, accentR, accentG, accentB, 255)
+            elseif isHover then
+                DM_DrawRect(rx, ry, rw, rh, 255, 255, 255, 12)
+            end
+
+            local labelColor = isSelected and 255 or 200
+            local catName = category.name or ""
+            local textSize = math.floor(15 * scale)
+            local textY = ry + math.floor(rh / 2) - math.floor(textSize / 2)
+            local textX = rx + math.floor(14 * scale)
+            DM_DrawTextSafe(textX, textY, catName, textSize, labelColor, labelColor, labelColor, 1.0)
+
+            if category.hasTabs then
+                local arrow = "›"
+                local arrowSize = math.floor(16 * scale)
+                local arrowW = Menu.GetTextWidth(arrow, arrowSize)
+                DM_DrawTextSafe(rx + rw - arrowW - math.floor(12 * scale), ry + math.floor(rh / 2) - math.floor(arrowSize / 2), arrow, arrowSize, 140, 140, 150, 1.0)
+            end
+        end
+    end
+
+    local opened = Menu.OpenedCategory and Menu.Categories[Menu.OpenedCategory]
+    if not opened or not opened.hasTabs or not opened.tabs then
+        local emptyMsg = "Select a category"
+        local size = math.floor(16 * scale)
+        local w = Menu.GetTextWidth(emptyMsg, size)
+        DM_DrawTextSafe(panelX + sidebarW + math.floor(((panelW - sidebarW) - w) / 2), panelY + math.floor(panelH / 2), emptyMsg, size, 130, 135, 145, 1.0)
+        return
+    end
+
+    local hoverTab = Menu.DisplayMenuHoverTab
+    local totalTabs = #opened.tabs
+    for i, tab in ipairs(opened.tabs) do
+        local tx, ty, tw, th = DM_GetTabRect(panelX, panelY, panelW, scale, i, totalTabs)
+        local isActive = (i == Menu.CurrentTab)
+        local isHover = (hoverTab == i)
+
+        if isActive then
+            local barH = math.max(2, math.floor(2 * scale))
+            DM_DrawRect(tx, ty + th - barH, tw, barH, accentR, accentG, accentB, 255)
+        elseif isHover then
+            DM_DrawRect(tx, ty, tw, th, 255, 255, 255, 10)
+        end
+
+        local size = math.floor(14 * scale)
+        local label = tab.name or ""
+        local labelW = Menu.GetTextWidth(label, size)
+        local lx = tx + math.floor((tw - labelW) / 2)
+        local ly = ty + math.floor(th / 2) - math.floor(size / 2)
+        local cR, cG, cB = (isActive and accentR or 200), (isActive and accentG or 200), (isActive and accentB or 200)
+        DM_DrawTextSafe(lx, ly, label, size, cR, cG, cB, 1.0)
+    end
+
+    local currentTab = opened.tabs[Menu.CurrentTab]
+    if not currentTab or not currentTab.items then return end
+
+    local areaX, areaY, areaW, areaH = DM_GetItemAreaRect(panelX, panelY, panelW, panelH, scale)
+    local rowH = layout.itemHeight * scale
+    local gap = layout.rowGap * scale
+    local maxVisible = math.max(1, math.floor((areaH + gap) / (rowH + gap)))
+    if maxVisible > layout.itemsPerPage then maxVisible = layout.itemsPerPage end
+
+    local totalItems = #currentTab.items
+    local scrollOffset = Menu.DisplayMenuItemScrollOffset or 0
+    if scrollOffset < 0 then scrollOffset = 0 end
+    if scrollOffset > math.max(0, totalItems - maxVisible) then
+        scrollOffset = math.max(0, totalItems - maxVisible)
+    end
+    Menu.DisplayMenuItemScrollOffset = scrollOffset
+
+    local hoverItem = Menu.DisplayMenuHoverItem
+    for displayIndex = 1, math.min(maxVisible, totalItems) do
+        local itemIndex = displayIndex + scrollOffset
+        local item = currentTab.items[itemIndex]
+        if item then
+            local rx, ry, rw, rh = DM_GetItemRowRect(areaX, areaY, areaW, scale, displayIndex)
+
+            if item.isSeparator then
+                local sepText = item.separatorText or ""
+                local sepSize = math.floor(13 * scale)
+                DM_DrawRect(rx, ry + math.floor(rh / 2), rw, math.max(1, math.floor(1 * scale)), 60, 62, 75, 220)
+                if sepText ~= "" then
+                    local tw = Menu.GetTextWidth(sepText, sepSize) + math.floor(12 * scale)
+                    DM_DrawRect(rx + math.floor(8 * scale), ry + math.floor(rh / 2) - math.floor(sepSize / 2) - math.floor(2 * scale), tw, sepSize + math.floor(4 * scale), 18, 19, 26, 255)
+                    DM_DrawTextSafe(rx + math.floor(14 * scale), ry + math.floor(rh / 2) - math.floor(sepSize / 2), sepText, sepSize, accentR, accentG, accentB, 1.0)
+                end
+            else
+                local isHover = (hoverItem == displayIndex)
+                local rowBgA = isHover and 22 or 14
+                DM_DrawRect(rx, ry, rw, rh, 255, 255, 255, rowBgA)
+                DM_DrawRect(rx, ry, math.max(1, math.floor(1 * scale)), rh, accentR, accentG, accentB, isHover and 255 or 90)
+
+                local nameSize = math.floor(14 * scale)
+                local nameY = ry + math.floor(rh / 2) - math.floor(nameSize / 2)
+                local nameX = rx + math.floor(14 * scale)
+                local labelText = item.name or ""
+                if item.bindKey and item.bindKeyName then
+                    labelText = labelText .. "  [" .. item.bindKeyName .. "]"
+                end
+                DM_DrawTextSafe(nameX, nameY, labelText, nameSize, 230, 230, 235, 1.0)
+
+                if item.type == "toggle" then
+                    local toggleW = math.floor(34 * scale)
+                    local toggleH = math.floor(16 * scale)
+                    local toggleX = rx + rw - toggleW - math.floor(14 * scale)
+                    local toggleY = ry + math.floor(rh / 2) - math.floor(toggleH / 2)
+                    local on = item.value == true
+                    if on then
+                        DM_DrawRect(toggleX, toggleY, toggleW, toggleH, accentR, accentG, accentB, 220)
+                    else
+                        DM_DrawRect(toggleX, toggleY, toggleW, toggleH, 60, 62, 75, 220)
+                    end
+                    local knobSize = toggleH - math.floor(4 * scale)
+                    local knobX = on and (toggleX + toggleW - knobSize - math.floor(2 * scale)) or (toggleX + math.floor(2 * scale))
+                    local knobY = toggleY + math.floor(2 * scale)
+                    DM_DrawRect(knobX, knobY, knobSize, knobSize, 240, 240, 245, 255)
+
+                    if item.hasSlider then
+                        local sliderW = math.floor(110 * scale)
+                        local sliderH = math.max(3, math.floor(4 * scale))
+                        local sliderX = toggleX - sliderW - math.floor(14 * scale)
+                        local sliderY = ry + math.floor(rh / 2) - math.floor(sliderH / 2)
+                        local minV = item.sliderMin or 0.0
+                        local maxV = item.sliderMax or 100.0
+                        local cur = item.sliderValue or minV
+                        local pct = 0
+                        if maxV > minV then pct = (cur - minV) / (maxV - minV) end
+                        pct = math.max(0, math.min(1, pct))
+                        DM_DrawRect(sliderX, sliderY, sliderW, sliderH, 60, 62, 75, 220)
+                        DM_DrawRect(sliderX, sliderY, math.floor(sliderW * pct), sliderH, accentR, accentG, accentB, 230)
+                        local valSize = math.floor(12 * scale)
+                        local valText = string.format("%g", cur)
+                        DM_DrawTextSafe(sliderX + sliderW + math.floor(8 * scale) + 0, ry + math.floor(rh / 2) - math.floor(valSize / 2) - math.floor(8 * scale), valText, valSize, 180, 180, 190, 1.0)
+                    end
+                elseif item.type == "slider" then
+                    local sliderW = math.floor(140 * scale)
+                    local sliderH = math.max(3, math.floor(4 * scale))
+                    local sliderX = rx + rw - sliderW - math.floor(60 * scale)
+                    local sliderY = ry + math.floor(rh / 2) - math.floor(sliderH / 2)
+                    local minV = item.min or 0.0
+                    local maxV = item.max or 100.0
+                    local cur = item.value or minV
+                    local pct = 0
+                    if maxV > minV then pct = (cur - minV) / (maxV - minV) end
+                    pct = math.max(0, math.min(1, pct))
+                    DM_DrawRect(sliderX, sliderY, sliderW, sliderH, 60, 62, 75, 220)
+                    DM_DrawRect(sliderX, sliderY, math.floor(sliderW * pct), sliderH, accentR, accentG, accentB, 230)
+                    local valSize = math.floor(13 * scale)
+                    local valText = string.format("%g", cur)
+                    local valW = Menu.GetTextWidth(valText, valSize)
+                    DM_DrawTextSafe(rx + rw - valW - math.floor(14 * scale), ry + math.floor(rh / 2) - math.floor(valSize / 2), valText, valSize, 220, 220, 230, 1.0)
+                elseif item.type == "selector" or item.type == "toggle_selector" then
+                    local options = item.options or {}
+                    local sel = item.selected or 1
+                    local optText = options[sel] or tostring(sel)
+                    local fullText = "< " .. optText .. " >"
+                    local size = math.floor(13 * scale)
+                    local fullW = Menu.GetTextWidth(fullText, size)
+                    local boxX = rx + rw - fullW - math.floor(20 * scale)
+                    local boxY = ry + math.floor(rh / 2) - math.floor(size / 2)
+                    DM_DrawTextSafe(boxX, boxY, fullText, size, accentR, accentG, accentB, 1.0)
+
+                    if item.type == "toggle_selector" then
+                        local toggleW = math.floor(28 * scale)
+                        local toggleH = math.floor(14 * scale)
+                        local toggleX = rx + rw - toggleW - math.floor(4 * scale)
+                        local toggleY = ry + math.floor(rh / 2) - math.floor(toggleH / 2)
+                        local on = item.value == true
+                        if on then
+                            DM_DrawRect(toggleX, toggleY, toggleW, toggleH, accentR, accentG, accentB, 220)
+                        else
+                            DM_DrawRect(toggleX, toggleY, toggleW, toggleH, 60, 62, 75, 220)
+                        end
+                        local knobSize = toggleH - math.floor(4 * scale)
+                        local knobX = on and (toggleX + toggleW - knobSize - math.floor(2 * scale)) or (toggleX + math.floor(2 * scale))
+                        local knobY = toggleY + math.floor(2 * scale)
+                        DM_DrawRect(knobX, knobY, knobSize, knobSize, 240, 240, 245, 255)
+                    end
+                elseif item.type == "action" then
+                    local btnText = "Run"
+                    local size = math.floor(12 * scale)
+                    local btnW = Menu.GetTextWidth(btnText, size) + math.floor(20 * scale)
+                    local btnH = math.floor(20 * scale)
+                    local btnX = rx + rw - btnW - math.floor(14 * scale)
+                    local btnY = ry + math.floor(rh / 2) - math.floor(btnH / 2)
+                    DM_DrawRect(btnX, btnY, btnW, btnH, accentR, accentG, accentB, 200)
+                    DM_DrawTextSafe(btnX + math.floor((btnW - Menu.GetTextWidth(btnText, size)) / 2), btnY + math.floor(btnH / 2) - math.floor(size / 2), btnText, size, 18, 19, 26, 1.0)
+                end
+            end
+        end
+    end
+
+    if totalItems > maxVisible then
+        local trackX = panelX + panelW - math.floor(6 * scale)
+        local trackY = areaY
+        local trackW = math.max(2, math.floor(3 * scale))
+        local trackH = areaH
+        DM_DrawRect(trackX, trackY, trackW, trackH, 60, 62, 75, 200)
+        local thumbH = math.max(20 * scale, trackH * (maxVisible / totalItems))
+        local maxOffset = totalItems - maxVisible
+        local pct = (maxOffset > 0) and (scrollOffset / maxOffset) or 0
+        local thumbY = trackY + (trackH - thumbH) * pct
+        DM_DrawRect(trackX, thumbY, trackW, thumbH, accentR, accentG, accentB, 230)
+    end
+
+    local footerH = math.floor(24 * scale)
+    local footerY = panelY + panelH - footerH
+    DM_DrawRect(panelX, footerY, panelW, footerH, 12, 13, 18, 255)
+    DM_DrawRect(panelX, footerY, panelW, 1, 40, 42, 52, 220)
+    local footerText = "discord.gg/arcaneservices"
+    local footerSize = math.floor(12 * scale)
+    DM_DrawTextSafe(panelX + math.floor(14 * scale), footerY + math.floor(footerH / 2) - math.floor(footerSize / 2), footerText, footerSize, 160, 165, 175, 1.0)
+    local pageText = string.format("%d/%d", math.min(scrollOffset + 1, math.max(1, totalItems)), math.max(1, totalItems))
+    local pageW = Menu.GetTextWidth(pageText, footerSize)
+    DM_DrawTextSafe(panelX + panelW - pageW - math.floor(14 * scale), footerY + math.floor(footerH / 2) - math.floor(footerSize / 2), pageText, footerSize, 160, 165, 175, 1.0)
+end
+
+function Menu.HandleDisplayMenuInput()
+    if not Menu.Visible or not Menu.DisplayMenu then
+        Menu.DisplayMenuHoverCategory = nil
+        Menu.DisplayMenuHoverTab = nil
+        Menu.DisplayMenuHoverItem = nil
+        Menu.DisplayMenuActiveSlider = nil
+        Menu.DisplayMenuLeftWasDown = false
+        Menu.DisplayMenuRightWasDown = false
+        return
+    end
+
+    local mouseX, mouseY, leftDown, leftPressed, rightDown, rightPressed = GetOverlayMouseState()
+    if not mouseX then return end
+
+    local leftClicked = leftPressed or (leftDown and not Menu.DisplayMenuLeftWasDown)
+    local rightClicked = rightPressed or (rightDown and not Menu.DisplayMenuRightWasDown)
+
+    if not leftDown then
+        Menu.DisplayMenuActiveSlider = nil
+    end
+
+    Menu.DisplayMenuHoverCategory = nil
+    Menu.DisplayMenuHoverTab = nil
+    Menu.DisplayMenuHoverItem = nil
+
+    local panelX, panelY, panelW, panelH, scale = DM_GetRect()
+    local layout = Menu.DisplayMenuLayout
+    local sidebarW = layout.sidebarWidth * scale
+    local headerH = layout.headerHeight * scale
+    local tabBarH = layout.tabBarHeight * scale
+    local insidePanel = IsPointInRect(mouseX, mouseY, panelX, panelY, panelW, panelH)
+
+    if rightClicked and insidePanel then
+        if Menu.OpenedCategory then
+            Menu.OpenedCategory = nil
+            Menu.CurrentItem = 1
+            Menu.CurrentTab = 1
+            Menu.DisplayMenuItemScrollOffset = 0
+        else
+            Menu.Visible = false
+        end
+        Menu.DisplayMenuLeftWasDown = leftDown
+        Menu.DisplayMenuRightWasDown = rightDown
+        return
+    end
+
+    local totalCategories = (#Menu.Categories) - 1
+    for displayIndex = 1, totalCategories do
+        local categoryIndex = displayIndex + 1
+        local category = Menu.Categories[categoryIndex]
+        if category then
+            local rx, ry, rw, rh = DM_GetSidebarRowRect(panelX, panelY, scale, displayIndex)
+            if IsPointInRect(mouseX, mouseY, rx, ry, rw, rh) then
+                Menu.DisplayMenuHoverCategory = displayIndex
+                Menu.CurrentCategory = categoryIndex
+                if leftClicked then
+                    if category.hasTabs and category.tabs then
+                        Menu.OpenedCategory = categoryIndex
+                        Menu.CurrentTab = 1
+                        if category.tabs[1] and category.tabs[1].items then
+                            Menu.CurrentItem = findNextNonSeparator(category.tabs[1].items, 0, 1)
+                        else
+                            Menu.CurrentItem = 1
+                        end
+                        Menu.DisplayMenuItemScrollOffset = 0
+                    end
+                end
+                break
+            end
+        end
+    end
+
+    local opened = Menu.OpenedCategory and Menu.Categories[Menu.OpenedCategory]
+    if opened and opened.hasTabs and opened.tabs then
+        local totalTabs = #opened.tabs
+        for i, tab in ipairs(opened.tabs) do
+            local tx, ty, tw, th = DM_GetTabRect(panelX, panelY, panelW, scale, i, totalTabs)
+            if IsPointInRect(mouseX, mouseY, tx, ty, tw, th) then
+                Menu.DisplayMenuHoverTab = i
+                if leftClicked then
+                    Menu.CurrentTab = i
+                    local newTab = opened.tabs[i]
+                    if newTab and newTab.items then
+                        Menu.CurrentItem = findNextNonSeparator(newTab.items, 0, 1)
+                    else
+                        Menu.CurrentItem = 1
+                    end
+                    Menu.DisplayMenuItemScrollOffset = 0
+                end
+                break
+            end
+        end
+
+        local currentTab = opened.tabs[Menu.CurrentTab]
+        if currentTab and currentTab.items then
+            local areaX, areaY, areaW, areaH = DM_GetItemAreaRect(panelX, panelY, panelW, panelH, scale)
+            local rowH = layout.itemHeight * scale
+            local gap = layout.rowGap * scale
+            local maxVisible = math.max(1, math.floor((areaH + gap) / (rowH + gap)))
+            if maxVisible > layout.itemsPerPage then maxVisible = layout.itemsPerPage end
+            local totalItems = #currentTab.items
+            local scrollOffset = Menu.DisplayMenuItemScrollOffset or 0
+
+            local insideArea = IsPointInRect(mouseX, mouseY, areaX, areaY, areaW, areaH)
+            if insideArea and Susano and Susano.GetAsyncKeyState then
+                local upDown, upPressed = Susano.GetAsyncKeyState(0x26)
+                local downDown, downPressed = Susano.GetAsyncKeyState(0x28)
+                if upPressed == true then scrollOffset = math.max(0, scrollOffset - 1) end
+                if downPressed == true then scrollOffset = math.min(math.max(0, totalItems - maxVisible), scrollOffset + 1) end
+                Menu.DisplayMenuItemScrollOffset = scrollOffset
+            end
+
+            for displayIndex = 1, math.min(maxVisible, totalItems) do
+                local itemIndex = displayIndex + scrollOffset
+                local item = currentTab.items[itemIndex]
+                if item and not item.isSeparator then
+                    local rx, ry, rw, rh = DM_GetItemRowRect(areaX, areaY, areaW, scale, displayIndex)
+                    if IsPointInRect(mouseX, mouseY, rx, ry, rw, rh) then
+                        Menu.DisplayMenuHoverItem = displayIndex
+                        Menu.CurrentItem = itemIndex
+
+                        local handled = false
+
+                        if item.type == "toggle" and item.hasSlider then
+                            local sliderW = math.floor(110 * scale)
+                            local sliderH = math.max(3, math.floor(4 * scale))
+                            local toggleW = math.floor(34 * scale)
+                            local sliderX = rx + rw - toggleW - math.floor(14 * scale) - sliderW - math.floor(14 * scale)
+                            local sliderY = ry + math.floor(rh / 2) - math.floor(sliderH / 2)
+                            if IsPointInRect(mouseX, mouseY, sliderX, sliderY - math.floor(8 * scale), sliderW, sliderH + math.floor(16 * scale)) then
+                                local pct = (mouseX - sliderX) / sliderW
+                                if leftDown or leftClicked then
+                                    SetSliderItemFromPercent(item, pct, true)
+                                    Menu.DisplayMenuActiveSlider = { item = item, kind = "toggle_slider", sliderX = sliderX, sliderWidth = sliderW }
+                                end
+                                handled = true
+                            end
+                        elseif item.type == "slider" then
+                            local sliderW = math.floor(140 * scale)
+                            local sliderH = math.max(3, math.floor(4 * scale))
+                            local sliderX = rx + rw - sliderW - math.floor(60 * scale)
+                            local sliderY = ry + math.floor(rh / 2) - math.floor(sliderH / 2)
+                            if IsPointInRect(mouseX, mouseY, sliderX, sliderY - math.floor(8 * scale), sliderW, sliderH + math.floor(16 * scale)) then
+                                local pct = (mouseX - sliderX) / sliderW
+                                if leftDown or leftClicked then
+                                    SetSliderItemFromPercent(item, pct, false)
+                                    Menu.DisplayMenuActiveSlider = { item = item, kind = "slider", sliderX = sliderX, sliderWidth = sliderW }
+                                end
+                                handled = true
+                            end
+                        elseif item.type == "toggle_selector" and item.options then
+                            local options = item.options
+                            local sel = item.selected or 1
+                            local optText = options[sel] or tostring(sel)
+                            local fullText = "< " .. optText .. " >"
+                            local size = math.floor(13 * scale)
+                            local fullW = Menu.GetTextWidth(fullText, size)
+                            local toggleW = math.floor(28 * scale)
+                            local boxX = rx + rw - fullW - math.floor(20 * scale)
+                            local toggleX = rx + rw - toggleW - math.floor(4 * scale)
+                            local toggleY = ry + math.floor(rh / 2) - math.floor(14 * scale / 2)
+
+                            if IsPointInRect(mouseX, mouseY, boxX, ry, fullW, rh) then
+                                if leftClicked then
+                                    if mouseX <= boxX + (fullW / 2) then
+                                        AdjustSelectorItem(item, -1, true)
+                                    else
+                                        AdjustSelectorItem(item, 1, true)
+                                    end
+                                end
+                                handled = true
+                            elseif IsPointInRect(mouseX, mouseY, toggleX, toggleY, toggleW, math.floor(14 * scale)) then
+                                if leftClicked then
+                                    TriggerPrimaryItemAction(item)
+                                end
+                                handled = true
+                            end
+                        elseif item.type == "selector" and item.options then
+                            local sel = item.selected or 1
+                            local optText = item.options[sel] or tostring(sel)
+                            local fullText = "< " .. optText .. " >"
+                            local size = math.floor(13 * scale)
+                            local fullW = Menu.GetTextWidth(fullText, size)
+                            local boxX = rx + rw - fullW - math.floor(20 * scale)
+                            if IsPointInRect(mouseX, mouseY, boxX, ry, fullW, rh) then
+                                if leftClicked then
+                                    if mouseX <= boxX + (fullW / 2) then
+                                        AdjustSelectorItem(item, -1, true)
+                                    else
+                                        AdjustSelectorItem(item, 1, true)
+                                    end
+                                end
+                                handled = true
+                            end
+                        end
+
+                        if leftClicked and not handled then
+                            TriggerPrimaryItemAction(item)
+                        end
+
+                        break
+                    end
+                end
+            end
+        end
+    end
+
+    if leftDown and Menu.DisplayMenuActiveSlider and Menu.DisplayMenuActiveSlider.item then
+        local slider = Menu.DisplayMenuActiveSlider
+        local pct = (mouseX - slider.sliderX) / slider.sliderWidth
+        SetSliderItemFromPercent(slider.item, pct, slider.kind == "toggle_slider")
+    end
+
+    Menu.DisplayMenuLeftWasDown = leftDown
+    Menu.DisplayMenuRightWasDown = rightDown
+end
+
+
 function Menu.Render()
     if Menu.TopLevelTabs and not Menu.Categories then
         Menu.UpdateCategoriesFromTopTab()
@@ -3140,6 +3731,15 @@ function Menu.ApplySpecialToggleState(item)
         Menu.ShowKeybinds = item.value == true
     elseif item.name == "Clickable Menu" then
         Menu.ClickableMenu = item.value == true
+    elseif item.name == "Display Menu" then
+        Menu.DisplayMenu = item.value == true
+        Menu.DisplayMenuHoverCategory = nil
+        Menu.DisplayMenuHoverTab = nil
+        Menu.DisplayMenuHoverItem = nil
+        Menu.DisplayMenuActiveSlider = nil
+        Menu.DisplayMenuLeftWasDown = false
+        Menu.DisplayMenuRightWasDown = false
+        Menu.DisplayMenuItemScrollOffset = 0
     elseif item.name == "Editor Mode" then
         Menu.EditorMode = item.value == true
     elseif item.name == "Flakes" then
