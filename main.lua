@@ -502,15 +502,14 @@ end
 
 local function SetInteractiveOverlayState(enable)
     local desiredState = enable == true
-    if Menu.InteractiveOverlayEnabled == desiredState then
-        return
+
+    if Susano and Susano.EnableOverlay then
+        if Menu.InteractiveOverlayEnabled ~= desiredState or desiredState then
+            Susano.EnableOverlay(desiredState)
+        end
     end
 
     Menu.InteractiveOverlayEnabled = desiredState
-
-    if Susano and Susano.EnableOverlay then
-        Susano.EnableOverlay(desiredState)
-    end
 end
 
 local function IsInteractiveOverlayActive()
@@ -525,6 +524,8 @@ local function IsInteractiveOverlayActive()
 end
 
 local DrawClickableCursor
+local ResolveOverlayCursorPosition
+local GetOverlayMouseState
 
 local function CleanupNotifications()
     if not Menu.Notifications then
@@ -849,10 +850,6 @@ function Menu.BlockGameplayInput()
         return
     end
 
-    if Menu.DisplayMenu then
-        return
-    end
-
     if not DisableControlAction then
         return
     end
@@ -863,6 +860,15 @@ function Menu.BlockGameplayInput()
 
             if DisableDisabledControlAction then
                 DisableDisabledControlAction(group, control, true)
+            end
+        end
+
+        if Menu.DisplayMenu then
+            for _, control in ipairs({ 1, 2, 24, 25, 30, 31, 32, 33, 34, 35, 68, 69, 70, 91, 92, 106, 107, 114, 115, 140, 141, 142, 257, 329, 330, 331, 332 }) do
+                DisableControlAction(group, control, true)
+                if DisableDisabledControlAction then
+                    DisableDisabledControlAction(group, control, true)
+                end
             end
         end
     end
@@ -3500,28 +3506,30 @@ end
 
 
 Menu.DisplayMenuLayout = {
-    width = 1120,
-    height = 680,
-    sidebarWidth = 262,
-    brandHeight = 66,
-    searchHeight = 40,
-    headerHeight = 58,
-    footerHeight = 28,
-    padding = 18,
-    categoryHeight = 44,
-    categoryGap = 8,
-    tabHeight = 38,
-    tabGap = 10,
-    sectionGap = 16,
-    sectionHeaderHeight = 26,
-    sectionPaddingX = 16,
-    sectionPaddingY = 14,
-    sectionRadius = 12,
-    rowGap = 10,
-    itemHeight = 30,
+    width = 1040,
+    height = 610,
+    minHeight = 540,
+    maxHeightRatio = 0.88,
+    sidebarWidth = 236,
+    brandHeight = 58,
+    searchHeight = 36,
+    headerHeight = 56,
+    footerHeight = 30,
+    padding = 16,
+    categoryHeight = 36,
+    categoryGap = 4,
+    tabHeight = 36,
+    tabGap = 8,
+    sectionGap = 14,
+    sectionHeaderHeight = 24,
+    sectionPaddingX = 14,
+    sectionPaddingY = 12,
+    sectionRadius = 14,
+    rowGap = 8,
+    itemHeight = 28,
     sliderHeight = 6,
-    controlWidth = 180,
-    scrollStep = 48
+    controlWidth = 172,
+    scrollStep = 42
 }
 
 local function SDM_Scale(value, scale)
@@ -3602,12 +3610,89 @@ local function SDM_GetAccent()
     return color.r or 0, color.g or 221, color.b or 255
 end
 
+local SDM_EnsureOpenedCategory
+local SDM_ItemHeight
+local SDM_BuildSections
+
+local function SDM_MeasureSidebarHeight(scale)
+    local layout = Menu.DisplayMenuLayout
+    local categoryCount = Menu.Categories and math.max(0, #Menu.Categories - 1) or 0
+    local total = (layout.brandHeight * scale)
+        + SDM_Scale(10, scale)
+        + (layout.searchHeight * scale)
+        + math.floor(SDM_Scale(layout.padding, scale) * 1.45)
+        + (categoryCount * layout.categoryHeight * scale)
+        + SDM_Scale(layout.padding, scale)
+
+    if categoryCount > 1 then
+        total = total + ((categoryCount - 1) * layout.categoryGap * scale)
+    end
+
+    return math.floor(total + 0.5)
+end
+
+local function SDM_MeasureTabContentHeight(tab, areaW, scale)
+    local layout = Menu.DisplayMenuLayout
+    local sections = SDM_BuildSections(tab)
+    if #sections == 0 then
+        return SDM_Scale(180, scale)
+    end
+
+    local columnCount = areaW >= SDM_Scale(700, scale) and 2 or 1
+    local sectionGap = SDM_Scale(layout.sectionGap, scale)
+    local rowGap = SDM_Scale(layout.rowGap, scale)
+    local sectionBaseHeight = SDM_Scale(layout.sectionHeaderHeight + (layout.sectionPaddingY * 2), scale)
+    local columnHeights = {}
+
+    for col = 1, columnCount do
+        columnHeights[col] = 0
+    end
+
+    for _, section in ipairs(sections) do
+        local shortest = 1
+        for col = 2, columnCount do
+            if columnHeights[col] < columnHeights[shortest] then
+                shortest = col
+            end
+        end
+
+        local sectionHeight = sectionBaseHeight
+        for index, item in ipairs(section.items or {}) do
+            sectionHeight = sectionHeight + SDM_ItemHeight(item, scale)
+            if index < #(section.items or {}) then
+                sectionHeight = sectionHeight + rowGap
+            end
+        end
+
+        columnHeights[shortest] = columnHeights[shortest] + sectionHeight + sectionGap
+    end
+
+    local contentHeight = 0
+    for col = 1, columnCount do
+        contentHeight = math.max(contentHeight, math.max(0, columnHeights[col] - sectionGap))
+    end
+
+    return math.max(SDM_Scale(190, scale), contentHeight)
+end
+
 local function SDM_GetRect()
     local layout = Menu.DisplayMenuLayout
     local screenW, screenH = MenuGetScreenSize()
-    local scale = Menu.Scale or 1.0
-    local width = math.min(math.floor(layout.width * scale), math.floor(screenW * 0.94))
-    local height = math.min(math.floor(layout.height * scale), math.floor(screenH * 0.90))
+    local defaultScale = Menu.DefaultScaleMultiplier or 1.0
+    local scale = (Menu.Scale or defaultScale) / math.max(0.01, defaultScale)
+    scale = SDM_Clamp(scale, 0.84, 1.22)
+    local width = math.min(math.floor(layout.width * scale), math.floor(screenW * 0.91))
+    local sidebarW = math.floor(layout.sidebarWidth * scale)
+    local padding = SDM_Scale(layout.padding, scale)
+    local headerH = SDM_Scale(layout.headerHeight, scale)
+    local footerH = SDM_Scale(layout.footerHeight, scale)
+    local areaW = math.max(SDM_Scale(420, scale), width - sidebarW - (padding * 2))
+    local opened = SDM_EnsureOpenedCategory and SDM_EnsureOpenedCategory() or nil
+    local currentTab = opened and opened.tabs and opened.tabs[Menu.CurrentTab] or nil
+    local contentDrivenHeight = headerH + footerH + (padding * 2) + SDM_MeasureTabContentHeight(currentTab, areaW, scale)
+    local sidebarDrivenHeight = SDM_MeasureSidebarHeight(scale) + footerH + padding
+    local targetHeight = math.max(SDM_Scale(layout.minHeight or layout.height, scale), contentDrivenHeight, sidebarDrivenHeight)
+    local height = math.min(targetHeight, math.floor(screenH * (layout.maxHeightRatio or 0.88)))
     local x = math.floor((screenW - width) / 2)
     local y = math.floor((screenH - height) / 2)
     return x, y, width, height, scale
@@ -3752,14 +3837,14 @@ local function SDM_DrawCheckbox(x, y, size, checked, accentR, accentG, accentB)
     end
 end
 
-local function SDM_ItemHeight(item, scale)
+SDM_ItemHeight = function(item, scale)
     if item and (item.type == "slider" or (item.type == "toggle" and item.hasSlider)) then
         return SDM_Scale(44, scale)
     end
     return SDM_Scale(Menu.DisplayMenuLayout.itemHeight, scale)
 end
 
-local function SDM_BuildSections(tab)
+SDM_BuildSections = function(tab)
     local sections = {}
     if not tab or not tab.items then
         return sections
@@ -3790,7 +3875,7 @@ local function SDM_BuildSections(tab)
     return sections
 end
 
-local function SDM_EnsureOpenedCategory()
+SDM_EnsureOpenedCategory = function()
     if not Menu.Categories or #Menu.Categories <= 1 then
         return nil
     end
@@ -4019,9 +4104,7 @@ end
 Menu.DrawDisplayMenu = function()
     if not Menu.Categories then return end
     if not (Susano and (Susano.DrawRectFilled or Susano.DrawFilledRect)) then return end
-    if not Menu.InteractiveOverlayEnabled then
-        SetInteractiveOverlayState(true)
-    end
+    SetInteractiveOverlayState(true)
 
     local panelX, panelY, panelW, panelH, scale = SDM_GetRect()
     local opened = SDM_EnsureOpenedCategory()
@@ -4039,15 +4122,15 @@ Menu.DrawDisplayMenu = function()
     local map = SDM_BuildMap(opened, currentTab, panelX, panelY, panelW, panelH, scale)
     Menu.DisplayMenuCurrentMap = map
 
-    SDM_DrawRect(0, 0, screenW, screenH, 0, 0, 0, 110)
-    SDM_DrawRect(panelX + SDM_Scale(6, scale), panelY + SDM_Scale(10, scale), panelW, panelH, 0, 0, 0, 85, radius + SDM_Scale(4, scale))
-    SDM_DrawRect(panelX, panelY, panelW, panelH, 18, 19, 24, 250, radius)
-    SDM_DrawOutline(panelX, panelY, panelW, panelH, 42, 43, 54, 215, 1)
-    SDM_DrawRect(panelX, panelY, sidebarW, panelH, 21, 22, 29, 255, radius)
+    SDM_DrawRect(0, 0, screenW, screenH, 0, 0, 0, 96)
+    SDM_DrawRect(panelX + SDM_Scale(8, scale), panelY + SDM_Scale(12, scale), panelW, panelH, 0, 0, 0, 72, radius + SDM_Scale(5, scale))
+    SDM_DrawRect(panelX, panelY, panelW, panelH, 19, 20, 26, 252, radius)
+    SDM_DrawOutline(panelX, panelY, panelW, panelH, 48, 50, 62, 210, 1)
+    SDM_DrawRect(panelX, panelY, sidebarW, panelH, 23, 24, 31, 255, radius)
     SDM_DrawRect(panelX + sidebarW - SDM_Scale(1, scale), panelY + SDM_Scale(10, scale), SDM_Scale(1, scale), panelH - SDM_Scale(20, scale), 42, 43, 54, 210)
-    SDM_DrawRect(panelX + sidebarW, panelY, panelW - sidebarW, SDM_Scale(layout.headerHeight, scale), 20, 21, 28, 255, radius)
-    SDM_DrawRect(panelX, panelY + panelH - footerH, panelW, footerH, 15, 16, 22, 255, radius)
-    SDM_DrawRect(panelX + sidebarW, panelY + SDM_Scale(layout.headerHeight, scale) - SDM_Scale(1, scale), panelW - sidebarW, SDM_Scale(1, scale), 38, 39, 50, 220)
+    SDM_DrawRect(panelX + sidebarW, panelY, panelW - sidebarW, SDM_Scale(layout.headerHeight, scale), 21, 22, 29, 255, radius)
+    SDM_DrawRect(panelX, panelY + panelH - footerH, panelW, footerH, 16, 17, 23, 255, radius)
+    SDM_DrawRect(panelX + sidebarW, panelY + SDM_Scale(layout.headerHeight, scale) - SDM_Scale(1, scale), panelW - sidebarW, SDM_Scale(1, scale), 40, 42, 54, 220)
 
     local badgeSize = SDM_Scale(18, scale)
     local badgeX = panelX + SDM_Scale(layout.padding, scale)
@@ -4057,8 +4140,8 @@ Menu.DrawDisplayMenu = function()
     SDM_DrawText(badgeX + badgeSize + SDM_Scale(10, scale), badgeY - SDM_Scale(2, scale), "arcane", 24, 245, 245, 248, 1.0)
     SDM_DrawText(badgeX + badgeSize + SDM_Scale(10, scale), badgeY + SDM_Scale(20, scale), "display menu", 11, 135, 140, 154, 1.0)
 
-    SDM_DrawRect(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 28, 29, 36, 255, SDM_Scale(8, scale))
-    SDM_DrawOutline(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 45, 47, 60, 210, 1)
+    SDM_DrawRect(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 30, 31, 38, 255, SDM_Scale(9, scale))
+    SDM_DrawOutline(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 49, 51, 64, 210, 1)
     SDM_DrawText(map.searchRect.x + SDM_Scale(12, scale), map.searchRect.y + SDM_Scale(11, scale), "Search", 12, 110, 114, 127, 1.0)
 
     for _, button in ipairs(map.categoryButtons) do
@@ -4083,6 +4166,7 @@ Menu.DrawDisplayMenu = function()
     local headerInfoW = SDM_TextWidth(headerInfo, 11)
     SDM_DrawText(panelX + sidebarW + SDM_Scale(layout.padding, scale), panelY + SDM_Scale(15, scale), headerLabel, 16, 242, 242, 246, 1.0)
     SDM_DrawText(panelX + panelW - headerInfoW - SDM_Scale(layout.padding, scale), panelY + SDM_Scale(18, scale), headerInfo, 11, 134, 138, 150, 1.0)
+    SDM_DrawRect(map.contentArea.x, map.contentArea.y, map.contentArea.w, map.contentArea.h, 17, 18, 24, 110, SDM_Scale(12, scale))
 
     for _, tabButton in ipairs(map.tabButtons) do
         local isActive = tabButton.tabIndex == Menu.CurrentTab
@@ -4201,9 +4285,7 @@ Menu.HandleDisplayMenuInput = function()
         return
     end
 
-    if not Menu.InteractiveOverlayEnabled then
-        SetInteractiveOverlayState(true)
-    end
+    SetInteractiveOverlayState(true)
 
     local mouseX, mouseY, leftDown, leftPressed, rightDown, rightPressed = GetOverlayMouseState()
     if not mouseX then
@@ -4649,7 +4731,7 @@ local function IsPointInRect(px, py, x, y, width, height)
     return px >= x and px <= (x + width) and py >= y and py <= (y + height)
 end
 
-local function ResolveOverlayCursorPosition()
+ResolveOverlayCursorPosition = function()
     if not (Susano and Susano.GetCursorPos) then
         return nil
     end
@@ -4701,7 +4783,7 @@ local function ResolveOverlayCursorPosition()
     return mouseX, mouseY
 end
 
-local function GetOverlayMouseState()
+GetOverlayMouseState = function()
     if not (Susano and Susano.GetCursorPos) then
         return nil
     end
@@ -4802,10 +4884,6 @@ end
 
 DrawClickableCursor = function()
     if not Susano or not Susano.GetCursorPos or not IsInteractiveOverlayActive() then
-        return
-    end
-
-    if Menu.Visible and Menu.DisplayMenu then
         return
     end
 
