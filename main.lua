@@ -3619,6 +3619,110 @@ local function SDM_GetGlyph(category)
     return string.upper(match or string.sub(name, 1, 1))
 end
 
+local function SDM_GetMenuToggleLabel()
+    local keyCode = Menu.SelectedKey or 0x31
+    if Menu.SelectedKeyName and Menu.SelectedKeyName ~= "" then
+        return Menu.SelectedKeyName
+    end
+    if Menu.GetKeyName then
+        return Menu.GetKeyName(keyCode)
+    end
+    return "1"
+end
+
+local function SDM_DrawCategoryIcon(category, x, y, size, selected, accentR, accentG, accentB)
+    local lineR = selected and accentR or 214
+    local lineG = selected and accentG or 218
+    local lineB = selected and accentB or 228
+    local bgR = selected and accentR or 34
+    local bgG = selected and accentG or 36
+    local bgB = selected and accentB or 46
+    local radius = math.max(5, size * 0.28)
+
+    SDM_DrawRect(x, y, size, size, bgR, bgG, bgB, selected and 0.22 or 0.12, radius)
+    SDM_DrawOutline(x, y, size, size, 72, 74, 90, selected and 170 or 120, 1)
+
+    local name = string.lower(tostring(category and category.name or ""))
+    if not (Susano and Susano.DrawLine) then
+        local glyph = SDM_GetGlyph(category)
+        local glyphW = SDM_TextWidth(glyph, 12)
+        SDM_DrawText(x + math.floor((size - glyphW) / 2), y + SDM_Scale(4, 1.0), glyph, 12, lineR, lineG, lineB, 1.0)
+        return
+    end
+
+    local function L(x1, y1, x2, y2, thickness)
+        Susano.DrawLine(x1, y1, x2, y2, SDM_Normalize(lineR), SDM_Normalize(lineG), SDM_Normalize(lineB), 1.0, thickness or 1.7)
+    end
+
+    local function C(cx, cy, r, filled, thickness)
+        if Susano and Susano.DrawCircle then
+            Susano.DrawCircle(cx, cy, r, filled == true, SDM_Normalize(lineR), SDM_Normalize(lineG), SDM_Normalize(lineB), 1.0, thickness or 1.6, 20)
+        else
+            SDM_DrawRect(cx - r, cy - r, r * 2, r * 2, lineR, lineG, lineB, 1.0, r)
+        end
+    end
+
+    if name == "player" or name == "miguelin" then
+        C(x + (size * 0.50), y + (size * 0.34), size * 0.16, false, 1.8)
+        L(x + (size * 0.50), y + (size * 0.50), x + (size * 0.50), y + (size * 0.74), 1.8)
+        L(x + (size * 0.34), y + (size * 0.59), x + (size * 0.66), y + (size * 0.59), 1.8)
+        L(x + (size * 0.39), y + (size * 0.88), x + (size * 0.50), y + (size * 0.74), 1.8)
+        L(x + (size * 0.61), y + (size * 0.88), x + (size * 0.50), y + (size * 0.74), 1.8)
+    elseif name == "online" then
+        C(x + (size * 0.38), y + (size * 0.36), size * 0.11, false, 1.7)
+        C(x + (size * 0.62), y + (size * 0.36), size * 0.11, false, 1.7)
+        C(x + (size * 0.50), y + (size * 0.58), size * 0.13, false, 1.7)
+        L(x + (size * 0.28), y + (size * 0.70), x + (size * 0.72), y + (size * 0.70), 1.7)
+    elseif name == "visual" then
+        L(x + (size * 0.14), y + (size * 0.50), x + (size * 0.31), y + (size * 0.30), 1.7)
+        L(x + (size * 0.31), y + (size * 0.30), x + (size * 0.69), y + (size * 0.30), 1.7)
+        L(x + (size * 0.69), y + (size * 0.30), x + (size * 0.86), y + (size * 0.50), 1.7)
+        L(x + (size * 0.86), y + (size * 0.50), x + (size * 0.69), y + (size * 0.70), 1.7)
+        L(x + (size * 0.69), y + (size * 0.70), x + (size * 0.31), y + (size * 0.70), 1.7)
+        L(x + (size * 0.31), y + (size * 0.70), x + (size * 0.14), y + (size * 0.50), 1.7)
+        C(x + (size * 0.50), y + (size * 0.50), size * 0.10, true, 1.6)
+    elseif name == "combat" then
+        C(x + (size * 0.50), y + (size * 0.50), size * 0.13, false, 1.7)
+        L(x + (size * 0.50), y + (size * 0.10), x + (size * 0.50), y + (size * 0.28), 1.7)
+        L(x + (size * 0.50), y + (size * 0.72), x + (size * 0.50), y + (size * 0.90), 1.7)
+        L(x + (size * 0.10), y + (size * 0.50), x + (size * 0.28), y + (size * 0.50), 1.7)
+        L(x + (size * 0.72), y + (size * 0.50), x + (size * 0.90), y + (size * 0.50), 1.7)
+    elseif name == "vehicle" then
+        SDM_DrawRect(x + (size * 0.18), y + (size * 0.42), size * 0.64, size * 0.18, lineR, lineG, lineB, 0.10, 3)
+        L(x + (size * 0.28), y + (size * 0.42), x + (size * 0.40), y + (size * 0.26), 1.7)
+        L(x + (size * 0.40), y + (size * 0.26), x + (size * 0.66), y + (size * 0.26), 1.7)
+        L(x + (size * 0.66), y + (size * 0.26), x + (size * 0.78), y + (size * 0.42), 1.7)
+        C(x + (size * 0.33), y + (size * 0.66), size * 0.08, false, 1.7)
+        C(x + (size * 0.67), y + (size * 0.66), size * 0.08, false, 1.7)
+    elseif name == "settings" then
+        C(x + (size * 0.50), y + (size * 0.50), size * 0.13, false, 1.7)
+        C(x + (size * 0.50), y + (size * 0.50), size * 0.04, true, 1.5)
+        L(x + (size * 0.50), y + (size * 0.10), x + (size * 0.50), y + (size * 0.24), 1.7)
+        L(x + (size * 0.50), y + (size * 0.76), x + (size * 0.50), y + (size * 0.90), 1.7)
+        L(x + (size * 0.10), y + (size * 0.50), x + (size * 0.24), y + (size * 0.50), 1.7)
+        L(x + (size * 0.76), y + (size * 0.50), x + (size * 0.90), y + (size * 0.50), 1.7)
+        L(x + (size * 0.22), y + (size * 0.22), x + (size * 0.31), y + (size * 0.31), 1.7)
+        L(x + (size * 0.69), y + (size * 0.69), x + (size * 0.78), y + (size * 0.78), 1.7)
+        L(x + (size * 0.22), y + (size * 0.78), x + (size * 0.31), y + (size * 0.69), 1.7)
+        L(x + (size * 0.69), y + (size * 0.31), x + (size * 0.78), y + (size * 0.22), 1.7)
+    elseif name == "miscellaneous" then
+        L(x + (size * 0.18), y + (size * 0.28), x + (size * 0.82), y + (size * 0.28), 1.7)
+        L(x + (size * 0.18), y + (size * 0.50), x + (size * 0.82), y + (size * 0.50), 1.7)
+        L(x + (size * 0.18), y + (size * 0.72), x + (size * 0.82), y + (size * 0.72), 1.7)
+        C(x + (size * 0.35), y + (size * 0.28), size * 0.06, true, 1.5)
+        C(x + (size * 0.60), y + (size * 0.50), size * 0.06, true, 1.5)
+        C(x + (size * 0.44), y + (size * 0.72), size * 0.06, true, 1.5)
+    elseif name == "farmeo coca" then
+        SDM_DrawOutline(x + (size * 0.22), y + (size * 0.24), size * 0.56, size * 0.56, lineR, lineG, lineB, 255, 1)
+        L(x + (size * 0.22), y + (size * 0.24), x + (size * 0.78), y + (size * 0.80), 1.7)
+        L(x + (size * 0.78), y + (size * 0.24), x + (size * 0.22), y + (size * 0.80), 1.7)
+    else
+        local glyph = SDM_GetGlyph(category)
+        local glyphW = SDM_TextWidth(glyph, 12)
+        SDM_DrawText(x + math.floor((size - glyphW) / 2), y + SDM_Scale(4, 1.0), glyph, 12, lineR, lineG, lineB, 1.0)
+    end
+end
+
 local function SDM_FormatValue(value)
     if type(value) == "number" then
         local rounded = math.floor(value + 0.5)
@@ -3916,6 +4020,9 @@ end
 Menu.DrawDisplayMenu = function()
     if not Menu.Categories then return end
     if not (Susano and (Susano.DrawRectFilled or Susano.DrawFilledRect)) then return end
+    if not Menu.InteractiveOverlayEnabled then
+        SetInteractiveOverlayState(true)
+    end
 
     local panelX, panelY, panelW, panelH, scale = SDM_GetRect()
     local opened = SDM_EnsureOpenedCategory()
@@ -3965,18 +4072,15 @@ Menu.DrawDisplayMenu = function()
             SDM_DrawRect(button.x, button.y, button.w, button.h, 255, 255, 255, 10, SDM_Scale(9, scale))
         end
 
-        local iconSize = SDM_Scale(22, scale)
+        local iconSize = SDM_Scale(24, scale)
         local iconX = button.x + SDM_Scale(12, scale)
         local iconY = button.y + math.floor((button.h - iconSize) / 2)
-        SDM_DrawRect(iconX, iconY, iconSize, iconSize, isSelected and accentR or 32, isSelected and accentG or 33, isSelected and accentB or 43, isSelected and 255 or 150, math.max(5, iconSize * 0.28))
-        local glyph = SDM_GetGlyph(button.category)
-        local glyphW = SDM_TextWidth(glyph, 12)
-        SDM_DrawText(iconX + math.floor((iconSize - glyphW) / 2), iconY + SDM_Scale(4, scale), glyph, 12, 245, 245, 248, 1.0)
-        SDM_DrawText(iconX + iconSize + SDM_Scale(10, scale), button.y + SDM_Scale(13, scale), button.category.name or "", 14, isSelected and 245 or 176, isSelected and 245 or 180, isSelected and 248 or 191, 1.0)
+        SDM_DrawCategoryIcon(button.category, iconX, iconY, iconSize, isSelected, accentR, accentG, accentB)
+        SDM_DrawText(iconX + iconSize + SDM_Scale(12, scale), button.y + SDM_Scale(13, scale), button.category.name or "", 14, isSelected and 245 or 176, isSelected and 245 or 180, isSelected and 248 or 191, 1.0)
     end
 
     local headerLabel = string.format("%s / %s", tostring(opened.name or "Category"), tostring(currentTab.name or "Tab"))
-    local headerInfo = string.format("%s  |  Mouse Overlay", Menu.BindShortcutLabel or "F10")
+    local headerInfo = string.format("%s  |  Menu Key", SDM_GetMenuToggleLabel())
     local headerInfoW = SDM_TextWidth(headerInfo, 11)
     SDM_DrawText(panelX + sidebarW + SDM_Scale(layout.padding, scale), panelY + SDM_Scale(15, scale), headerLabel, 16, 242, 242, 246, 1.0)
     SDM_DrawText(panelX + panelW - headerInfoW - SDM_Scale(layout.padding, scale), panelY + SDM_Scale(18, scale), headerInfo, 11, 134, 138, 150, 1.0)
@@ -4096,6 +4200,10 @@ Menu.HandleDisplayMenuInput = function()
         Menu.DisplayMenuLeftWasDown = false
         Menu.DisplayMenuRightWasDown = false
         return
+    end
+
+    if not Menu.InteractiveOverlayEnabled then
+        SetInteractiveOverlayState(true)
     end
 
     local mouseX, mouseY, leftDown, leftPressed, rightDown, rightPressed = GetOverlayMouseState()
@@ -4613,15 +4721,19 @@ local function DrawPointerCursor(mouseX, mouseY, pressed)
     local accentR, accentG, accentB = GetClickableCursorAccentColor()
     local offsetX = pressed and -0.5 or 0.0
     local offsetY = pressed and 0.5 or 0.0
+    local cursorScale = (Menu.DisplayMenu and Menu.Visible) and 1.18 or 1.0
+    local function PX(value)
+        return value * cursorScale
+    end
 
     local points = {
         { x = mouseX + offsetX,      y = mouseY + offsetY },
-        { x = mouseX + offsetX,      y = mouseY + 18 + offsetY },
-        { x = mouseX + 4 + offsetX,  y = mouseY + 14 + offsetY },
-        { x = mouseX + 8 + offsetX,  y = mouseY + 24 + offsetY },
-        { x = mouseX + 12 + offsetX, y = mouseY + 22 + offsetY },
-        { x = mouseX + 8 + offsetX,  y = mouseY + 12 + offsetY },
-        { x = mouseX + 15 + offsetX, y = mouseY + 12 + offsetY }
+        { x = mouseX + offsetX,      y = mouseY + PX(18) + offsetY },
+        { x = mouseX + PX(4) + offsetX,  y = mouseY + PX(14) + offsetY },
+        { x = mouseX + PX(8) + offsetX,  y = mouseY + PX(24) + offsetY },
+        { x = mouseX + PX(12) + offsetX, y = mouseY + PX(22) + offsetY },
+        { x = mouseX + PX(8) + offsetX,  y = mouseY + PX(12) + offsetY },
+        { x = mouseX + PX(15) + offsetX, y = mouseY + PX(12) + offsetY }
     }
 
     for i = 1, #points do
@@ -4642,13 +4754,13 @@ local function DrawPointerCursor(mouseX, mouseY, pressed)
         DrawClickableCursorLine(current.x, current.y, nextPoint.x, nextPoint.y, 1.0, 1.0, 1.0, 1.0, 2.0)
     end
 
-    DrawClickableCursorLine(mouseX + 4 + offsetX, mouseY + 14 + offsetY, mouseX + 9 + offsetX, mouseY + 22 + offsetY, accentR, accentG, accentB, 1.0, 2.1)
-    DrawClickableCursorLine(mouseX + 1 + offsetX, mouseY + 1 + offsetY, mouseX + 4 + offsetX, mouseY + 4 + offsetY, accentR, accentG, accentB, 0.90, 1.6)
+    DrawClickableCursorLine(mouseX + PX(4) + offsetX, mouseY + PX(14) + offsetY, mouseX + PX(9) + offsetX, mouseY + PX(22) + offsetY, accentR, accentG, accentB, 1.0, 2.1)
+    DrawClickableCursorLine(mouseX + PX(1) + offsetX, mouseY + PX(1) + offsetY, mouseX + PX(4) + offsetX, mouseY + PX(4) + offsetY, accentR, accentG, accentB, 0.90, 1.6)
 
     if Susano and Susano.DrawCircle then
-        Susano.DrawCircle(mouseX + offsetX, mouseY + offsetY, pressed and 2.5 or 2.0, true, accentR, accentG, accentB, pressed and 0.95 or 0.75, 1.0, 18)
+        Susano.DrawCircle(mouseX + offsetX, mouseY + offsetY, (pressed and 2.5 or 2.0) * cursorScale, true, accentR, accentG, accentB, pressed and 0.95 or 0.75, 1.0, 18)
     elseif Susano and Susano.DrawRectFilled then
-        Susano.DrawRectFilled(mouseX - 1 + offsetX, mouseY - 1 + offsetY, 3, 3, accentR, accentG, accentB, pressed and 0.95 or 0.75, 1)
+        Susano.DrawRectFilled(mouseX - 1 + offsetX, mouseY - 1 + offsetY, PX(3), PX(3), accentR, accentG, accentB, pressed and 0.95 or 0.75, 1)
     end
 end
 
@@ -5285,6 +5397,8 @@ function Menu.HandleInput()
         if keyPressed then
             local wasVisible = Menu.Visible
             Menu.Visible = not Menu.Visible
+            Menu.DisplayMenuCurrentMap = nil
+            SetInteractiveOverlayState(IsInteractiveOverlayActive())
 
             if wasVisible and not Menu.Visible and not Menu.ShowKeybinds and not Menu.ShowSpectatorList then
                 if Susano and Susano.ResetFrame then
