@@ -502,15 +502,15 @@ end
 
 local function SetInteractiveOverlayState(enable)
     local desiredState = enable == true
+    if Susano and Susano.EnableOverlay then
+        Susano.EnableOverlay(desiredState)
+    end
+
     if Menu.InteractiveOverlayEnabled == desiredState then
         return
     end
 
     Menu.InteractiveOverlayEnabled = desiredState
-
-    if Susano and Susano.EnableOverlay then
-        Susano.EnableOverlay(desiredState)
-    end
 end
 
 local function IsInteractiveOverlayActive()
@@ -846,6 +846,10 @@ end
 
 function Menu.BlockGameplayInput()
     if not Menu.Visible or not Menu.BlockInputWhileOpen then
+        return
+    end
+
+    if Menu.DisplayMenu then
         return
     end
 
@@ -2145,7 +2149,7 @@ function Menu.DrawKeySelector(alpha)
     local itemName = Menu.BindingItem and (Menu.BindingItem.name or "Option") or "Menu Toggle"
     local keyName = Menu.BindingItem and Menu.BindingKeyName or Menu.SelectedKeyName
     if not keyName then keyName = "..." end
-    local status = "press a key"
+    local status = "press a key or ESC"
     local rowText = itemName .. " [" .. keyName .. "] - " .. status
 
     local totalHeight = headerHeight + barHeight + padding + lineHeight + padding
@@ -4400,10 +4404,11 @@ function Menu.Render()
     end
 
     Menu.BlockGameplayInput()
+    local drawDisplayMenuLate = false
 
     if Menu.Visible then
         if Menu.DisplayMenu then
-            Menu.DrawDisplayMenu()
+            drawDisplayMenuLate = true
         else
             Menu.DrawBackground()
             Menu.DrawHeader()
@@ -4428,6 +4433,10 @@ function Menu.Render()
         local success, err = pcall(Menu.OnRender)
         if not success then
         end
+    end
+
+    if drawDisplayMenuLate then
+        Menu.DrawDisplayMenu()
     end
 
     if Menu.HasNotifications() then
@@ -4567,6 +4576,38 @@ function Menu.CaptureBindableKey()
                     Menu.KeyStates[keyCode] = false
                 end
 
+                if pressed == true or (down == true and not wasDown) then
+                    return keyCode
+                end
+            end
+        end
+    end
+
+    return nil
+end
+
+local function IsModifierVirtualKey(keyCode)
+    return keyCode == 0x10 or keyCode == 0x11 or keyCode == 0x12
+        or keyCode == 0xA0 or keyCode == 0xA1
+        or keyCode == 0xA2 or keyCode == 0xA3
+        or keyCode == 0xA4 or keyCode == 0xA5
+end
+
+local function CaptureMenuToggleKey()
+    for _, keyCode in ipairs(Menu.BindableKeys) do
+        if keyCode ~= 0x0D and not IsModifierVirtualKey(keyCode) then
+            local down, pressed = Menu.GetKeyState(keyCode)
+            local wasDown = Menu.KeyStates[keyCode] or false
+
+            if Menu.SuppressCaptureUntilRelease == keyCode then
+                if down == true then
+                    Menu.KeyStates[keyCode] = true
+                else
+                    Menu.KeyStates[keyCode] = false
+                    Menu.SuppressCaptureUntilRelease = nil
+                end
+            else
+                Menu.KeyStates[keyCode] = down == true
                 if pressed == true or (down == true and not wasDown) then
                     return keyCode
                 end
@@ -4766,6 +4807,10 @@ end
 
 DrawClickableCursor = function()
     if not Susano or not Susano.GetCursorPos or not IsInteractiveOverlayActive() then
+        return
+    end
+
+    if Menu.Visible and Menu.DisplayMenu then
         return
     end
 
@@ -4974,6 +5019,7 @@ local function TriggerPrimaryItemAction(item)
             Menu.SelectingKey = true
             Menu.SelectedKey = Menu.SelectedKey
             Menu.SelectedKeyName = Menu.SelectedKeyName
+            Menu.SuppressCaptureUntilRelease = Menu.SelectedKey or 0x31
         end
 
         if item.onClick then
@@ -5275,6 +5321,15 @@ function Menu.HandleInput()
             return
         end
 
+        if Menu.IsKeyJustPressed(0x1B) then
+            Menu.SelectingBind = false
+            Menu.BindingItem = nil
+            Menu.BindingKey = nil
+            Menu.BindingKeyName = nil
+            SetInteractiveOverlayState(IsInteractiveOverlayActive())
+            return
+        end
+
         if Menu.IsKeyJustPressed(0x0D) then
             if Menu.BindingKey and Menu.BindingItem then
                 Menu.BindingItem.bindKey = Menu.BindingKey
@@ -5295,6 +5350,18 @@ function Menu.HandleInput()
         if keyCode then
             Menu.BindingKey = keyCode
             Menu.BindingKeyName = Menu.GetKeyName(keyCode)
+            if Menu.BindingItem then
+                local itemName = Menu.BindingItem.name or "option"
+                local savedKeyName = Menu.BindingKeyName
+                Menu.BindingItem.bindKey = Menu.BindingKey
+                Menu.BindingItem.bindKeyName = Menu.BindingKeyName
+                Menu.SelectingBind = false
+                Menu.BindingItem = nil
+                Menu.BindingKey = nil
+                Menu.BindingKeyName = nil
+                Menu.NotifyInteraction({ name = itemName }, "bind", savedKeyName)
+                SetInteractiveOverlayState(IsInteractiveOverlayActive())
+            end
         end
         return
     end
@@ -5304,18 +5371,28 @@ function Menu.HandleInput()
             return
         end
 
+        if Menu.IsKeyJustPressed(0x1B) then
+            Menu.SelectingKey = false
+            SetInteractiveOverlayState(IsInteractiveOverlayActive())
+            return
+        end
+
         if Menu.IsKeyJustPressed(0x0D) then
             if Menu.SelectedKey then
                 Menu.SelectingKey = false
                 Menu.NotifyInteraction({ name = "Tecla del menu" }, "bind", Menu.SelectedKeyName or Menu.GetKeyName(Menu.SelectedKey))
+                SetInteractiveOverlayState(IsInteractiveOverlayActive())
             end
             return
         end
 
-        local keyCode = Menu.CaptureBindableKey()
+        local keyCode = CaptureMenuToggleKey()
         if keyCode then
             Menu.SelectedKey = keyCode
             Menu.SelectedKeyName = Menu.GetKeyName(keyCode)
+            Menu.SelectingKey = false
+            Menu.NotifyInteraction({ name = "Tecla del menu" }, "bind", Menu.SelectedKeyName)
+            SetInteractiveOverlayState(IsInteractiveOverlayActive())
         end
         return
     end
@@ -5871,6 +5948,7 @@ function Menu.HandleInput()
                             Menu.SelectingKey = true
                             Menu.SelectedKey = Menu.SelectedKey
                             Menu.SelectedKeyName = Menu.SelectedKeyName
+                            Menu.SuppressCaptureUntilRelease = Menu.SelectedKey or 0x31
                             print("Changing menu keybind...")
                         end
                         if item.onClick then
@@ -5974,7 +6052,6 @@ CreateThread(function()
             Menu.LoadingProgress = 100.0
             Menu.IsLoading = false
             Menu.LoadingComplete = true
-            Menu.SelectingKey = true
             break
         end
 
