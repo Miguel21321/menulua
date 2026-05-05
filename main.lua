@@ -3678,9 +3678,7 @@ end
 local function SDM_GetRect()
     local layout = Menu.DisplayMenuLayout
     local screenW, screenH = MenuGetScreenSize()
-    local defaultScale = Menu.DefaultScaleMultiplier or 1.0
-    local scale = (Menu.Scale or defaultScale) / math.max(0.01, defaultScale)
-    scale = SDM_Clamp(scale, 0.84, 1.22)
+    local scale = Menu.Scale or 1.0
     local width = math.min(math.floor(layout.width * scale), math.floor(screenW * 0.91))
     local sidebarW = math.floor(layout.sidebarWidth * scale)
     local padding = SDM_Scale(layout.padding, scale)
@@ -4731,7 +4729,7 @@ local function IsPointInRect(px, py, x, y, width, height)
     return px >= x and px <= (x + width) and py >= y and py <= (y + height)
 end
 
-ResolveOverlayCursorPosition = function()
+local function ResolveOverlayCursorPosition()
     if not (Susano and Susano.GetCursorPos) then
         return nil
     end
@@ -4783,7 +4781,7 @@ ResolveOverlayCursorPosition = function()
     return mouseX, mouseY
 end
 
-GetOverlayMouseState = function()
+local function GetOverlayMouseState()
     if not (Susano and Susano.GetCursorPos) then
         return nil
     end
@@ -4884,6 +4882,10 @@ end
 
 DrawClickableCursor = function()
     if not Susano or not Susano.GetCursorPos or not IsInteractiveOverlayActive() then
+        return
+    end
+
+    if Menu.Visible and Menu.DisplayMenu then
         return
     end
 
