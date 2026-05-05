@@ -74,7 +74,8 @@ Menu.BindShortcutKey = 0x79
 Menu.BindShortcutLabel = "F10"
 Menu.SuppressCaptureUntilRelease = nil
 Menu.MenuKeyBootstrapPending = false
-Menu.MenuToggleKeyStoreName = "arcane_menu_toggle_key"
+Menu.MenuToggleKeyStoreName = "arcane_menu_toggle_key_manual_v2"
+Menu.MenuToggleKeyManualStoreName = "arcane_menu_toggle_key_manual_v2_flag"
 
 
 Menu.CurrentTopTab = 1
@@ -2427,8 +2428,7 @@ end
 
 local function buildKeybindRows()
     local rows = {}
-    local menuKeyCode = Menu.SelectedKey or Menu.BindShortcutKey or 0x79
-    local menuKeyName = Menu.SelectedKeyName or Menu.GetKeyName(menuKeyCode)
+    local menuKeyName = (Menu.SelectedKeyName and Menu.SelectedKeyName ~= "" and Menu.SelectedKeyName) or "Unassigned"
 
     table.insert(rows, {
         leftText = "Toggle Menu",
@@ -3626,14 +3626,10 @@ local function SDM_GetGlyph(category)
 end
 
 local function SDM_GetMenuToggleLabel()
-    local keyCode = Menu.SelectedKey or Menu.BindShortcutKey or 0x79
     if Menu.SelectedKeyName and Menu.SelectedKeyName ~= "" then
         return Menu.SelectedKeyName
     end
-    if Menu.GetKeyName then
-        return Menu.GetKeyName(keyCode)
-    end
-    return "1"
+    return "Unassigned"
 end
 
 local function SDM_DrawCategoryIcon(category, x, y, size, selected, accentR, accentG, accentB)
@@ -4643,6 +4639,7 @@ local function PersistMenuToggleKey()
 
     if SetResourceKvpInt then
         pcall(SetResourceKvpInt, Menu.MenuToggleKeyStoreName, Menu.SelectedKey)
+        pcall(SetResourceKvpInt, Menu.MenuToggleKeyManualStoreName, 1)
     end
 
     if SetResourceKvp then
@@ -4659,19 +4656,15 @@ local function RestoreMenuToggleKey()
     end
 
     if GetResourceKvpInt then
-        local ok, storedKey = pcall(GetResourceKvpInt, Menu.MenuToggleKeyStoreName)
-        if ok and IsAssignableMenuToggleKey(storedKey) then
-            Menu.SelectedKey = storedKey
-            Menu.SelectedKeyName = Menu.GetKeyName(storedKey)
-            return "stored"
+        local markerOk, markerValue = pcall(GetResourceKvpInt, Menu.MenuToggleKeyManualStoreName)
+        if markerOk and markerValue == 1 then
+            local ok, storedKey = pcall(GetResourceKvpInt, Menu.MenuToggleKeyStoreName)
+            if ok and IsAssignableMenuToggleKey(storedKey) then
+                Menu.SelectedKey = storedKey
+                Menu.SelectedKeyName = Menu.GetKeyName(storedKey)
+                return "stored"
+            end
         end
-    end
-
-    local fallbackKey = Menu.BindShortcutKey or 0x79
-    if IsAssignableMenuToggleKey(fallbackKey) then
-        Menu.SelectedKey = fallbackKey
-        Menu.SelectedKeyName = Menu.GetKeyName(fallbackKey)
-        return "fallback"
     end
 
     return nil
@@ -5078,7 +5071,7 @@ local function TriggerPrimaryItemAction(item)
             Menu.SelectingKey = true
             Menu.SelectedKey = Menu.SelectedKey
             Menu.SelectedKeyName = Menu.SelectedKeyName
-            Menu.SuppressCaptureUntilRelease = Menu.SelectedKey or Menu.BindShortcutKey or 0x79
+            Menu.SuppressCaptureUntilRelease = Menu.SelectedKey
         end
 
         if item.onClick then
@@ -5522,8 +5515,8 @@ function Menu.HandleInput()
         end
     end
 
-    local toggleKeyCode = Menu.SelectedKey or Menu.BindShortcutKey or 0x79
-    if Susano and Susano.GetAsyncKeyState then
+    local toggleKeyCode = Menu.SelectedKey
+    if toggleKeyCode and Susano and Susano.GetAsyncKeyState then
         local down, pressed = Menu.GetKeyState(toggleKeyCode)
 
         local wasDown = Menu.KeyStates[toggleKeyCode] or false
@@ -6018,7 +6011,7 @@ function Menu.HandleInput()
                             Menu.SelectingKey = true
                             Menu.SelectedKey = Menu.SelectedKey
                             Menu.SelectedKeyName = Menu.SelectedKeyName
-                            Menu.SuppressCaptureUntilRelease = Menu.SelectedKey or Menu.BindShortcutKey or 0x79
+                            Menu.SuppressCaptureUntilRelease = Menu.SelectedKey
                             print("Changing menu keybind...")
                         end
                         if item.onClick then
@@ -6122,13 +6115,8 @@ CreateThread(function()
             Menu.LoadingProgress = 100.0
             Menu.IsLoading = false
             Menu.LoadingComplete = true
-            local keyRestoreState = RestoreMenuToggleKey()
-            if keyRestoreState == "fallback" then
-                Menu.Visible = true
-                Menu.SelectingKey = true
-                Menu.MenuKeyBootstrapPending = true
-                Menu.SuppressCaptureUntilRelease = nil
-            elseif not IsAssignableMenuToggleKey(Menu.SelectedKey) then
+            RestoreMenuToggleKey()
+            if not IsAssignableMenuToggleKey(Menu.SelectedKey) then
                 Menu.Visible = true
                 Menu.SelectingKey = true
                 Menu.MenuKeyBootstrapPending = true
