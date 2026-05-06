@@ -711,8 +711,13 @@ local function ArcaneBuildDuiHtml()
         return nil
     end
 
-    html = html:gsub('<link%s+rel="stylesheet"%s+href="dui.css"%s*/?>', "<style>\n" .. css .. "\n</style>", 1)
-    html = html:gsub('<script%s+src="dui.js"%s*></script>', '<script>window.__ARCANE_DUI__ = true;</script><script>\n' .. js .. '\n</script>', 1)
+    html = html:gsub('<link%s+rel="stylesheet"%s+href="dui.css"%s*/?>', function()
+        return "<style>\n" .. css .. "\n</style>"
+    end, 1)
+
+    html = html:gsub('<script%s+src="dui.js"%s*></script>', function()
+        return '<script>window.__ARCANE_DUI__ = true;</script><script>\n' .. js .. '\n</script>'
+    end, 1)
     return html
 end
 
