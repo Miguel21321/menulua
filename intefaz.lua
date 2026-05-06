@@ -118,6 +118,7 @@ Menu.DuiDisplayMenuTxnName = nil
 Menu.DuiDisplayMenuWidth = 0
 Menu.DuiDisplayMenuHeight = 0
 Menu.DuiDisplayMenuHtml = nil
+Menu.DuiDisplayMenuCreatedAt = 0
 Menu.DuiDisplayMenuInitError = nil
 Menu.DuiDisplayMenuMissingLogged = false
 Menu.DuiDisplayMenuMouseLeftDown = false
@@ -746,6 +747,35 @@ local function ArcaneBuildDuiHtml()
     return html
 end
 
+local function ArcaneBuildDuiUrl(html)
+    if type(html) ~= "string" or html == "" then
+        return nil
+    end
+
+    if io and type(io.open) == "function" and type(_G) == "table" and type(_G.__ARCANE_BASE_DIR) == "string" and _G.__ARCANE_BASE_DIR ~= "" then
+        local runtimePath = _G.__ARCANE_BASE_DIR .. "ui\\dui.runtime.html"
+        local writeOk = pcall(function()
+            local handle = io.open(runtimePath, "wb")
+            if not handle then
+                error("open failed")
+            end
+            handle:write(html)
+            handle:close()
+        end)
+
+        if writeOk then
+            local normalizedPath = string.gsub(runtimePath, "\\", "/")
+            if string.match(normalizedPath, "^[A-Za-z]:") then
+                normalizedPath = "/" .. normalizedPath
+            end
+            normalizedPath = string.gsub(normalizedPath, " ", "%%20")
+            return "file://" .. normalizedPath
+        end
+    end
+
+    return "data:text/html;charset=utf-8," .. ArcaneUrlEncode(html)
+end
+
 function Menu.ShouldUseDuiDisplayMenu()
     local supported = ArcaneCanUseDuiDisplayMenu()
     Menu.DuiDisplayMenuSupported = supported
@@ -778,6 +808,7 @@ function Menu.DestroyDuiDisplayMenu()
     Menu.DuiDisplayMenuWidth = 0
     Menu.DuiDisplayMenuHeight = 0
     Menu.DuiDisplayMenuInitError = nil
+    Menu.DuiDisplayMenuCreatedAt = 0
     Menu.DuiDisplayMenuMouseLeftDown = false
     Menu.DuiDisplayMenuMouseRightDown = false
 end
@@ -806,15 +837,15 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
     end
 
     if not Menu.DuiDisplayMenuObject then
-        local encodedHtml = ArcaneUrlEncode(Menu.DuiDisplayMenuHtml)
-        local duiUrl = "data:text/html;charset=utf-8," .. encodedHtml
+        local duiUrl = ArcaneBuildDuiUrl(Menu.DuiDisplayMenuHtml)
         local suffix = tostring(math.floor((GetGameTimer and GetGameTimer() or 0) + math.random(1000, 9999)))
 
         Menu.DuiDisplayMenuTxdName = "arcane_dui_txd_" .. suffix
         Menu.DuiDisplayMenuTxnName = "arcane_dui_txn_" .. suffix
-        Menu.DuiDisplayMenuObject = CreateDui(duiUrl, targetW, targetH)
+        Menu.DuiDisplayMenuObject = duiUrl and CreateDui(duiUrl, targetW, targetH) or nil
         Menu.DuiDisplayMenuWidth = targetW
         Menu.DuiDisplayMenuHeight = targetH
+        Menu.DuiDisplayMenuCreatedAt = GetGameTimer and GetGameTimer() or 0
         Menu.DuiDisplayMenuTxdHandle = CreateRuntimeTxd(Menu.DuiDisplayMenuTxdName)
         if not Menu.DuiDisplayMenuObject and Menu.DuiDisplayMenuInitError ~= "create" then
             Menu.DuiDisplayMenuInitError = "create"
@@ -827,6 +858,11 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
     end
 
     if not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
+        local now = GetGameTimer and GetGameTimer() or 0
+        if (now - (Menu.DuiDisplayMenuCreatedAt or 0)) > 1800 and Menu.DuiDisplayMenuInitError ~= "load" then
+            Menu.DuiDisplayMenuInitError = "load"
+            print("Arcane DUI error: browser never became available")
+        end
         return false
     end
 
@@ -3898,30 +3934,30 @@ end
 
 
 Menu.DisplayMenuLayout = {
-    width = 1120,
-    height = 650,
-    minHeight = 500,
+    width = 1110,
+    height = 528,
+    minHeight = 372,
     maxHeightRatio = 0.90,
-    sidebarWidth = 246,
-    brandHeight = 74,
-    searchHeight = 54,
+    sidebarWidth = 214,
+    brandHeight = 58,
+    searchHeight = 42,
     headerHeight = 88,
-    footerHeight = 34,
-    padding = 18,
-    categoryHeight = 42,
-    categoryGap = 8,
+    footerHeight = 26,
+    padding = 15,
+    categoryHeight = 38,
+    categoryGap = 6,
     tabHeight = 34,
-    tabGap = 10,
-    sectionGap = 16,
+    tabGap = 8,
+    sectionGap = 12,
     sectionHeaderHeight = 26,
-    sectionPaddingX = 18,
-    sectionPaddingY = 16,
-    sectionRadius = 18,
-    rowGap = 10,
+    sectionPaddingX = 15,
+    sectionPaddingY = 14,
+    sectionRadius = 16,
+    rowGap = 7,
     itemHeight = 38,
     sliderHeight = 6,
-    controlWidth = 196,
-    scrollStep = 44
+    controlWidth = 176,
+    scrollStep = 40
 }
 
 local function SDM_Scale(value, scale)
@@ -4089,7 +4125,7 @@ local function SDM_GetSectionColumnCount(sections, areaW, scale)
     end
 
     if #sections == 1 then
-        return areaW >= SDM_Scale(820, scale) and 2 or 1
+        return 1
     end
 
     if #sections == 2 then
@@ -4166,7 +4202,7 @@ local function SDM_GetRect()
     local screenW, screenH = MenuGetScreenSize()
     local defaultScale = Menu.DefaultScaleMultiplier or 1.0
     local scale = (Menu.Scale or defaultScale) / math.max(0.01, defaultScale)
-    scale = SDM_Clamp(scale, 0.84, 1.22)
+    scale = SDM_Clamp(scale, 0.82, 1.16)
     local width = math.min(math.floor(layout.width * scale), math.floor(screenW * 0.91))
     local sidebarW = math.floor(layout.sidebarWidth * scale)
     local padding = SDM_Scale(layout.padding, scale)
@@ -4200,95 +4236,66 @@ local function SDM_GetMenuToggleLabel()
     return "Unassigned"
 end
 
+local function SDM_GetDisplayRendererInfo()
+    local info = {
+        brandSubtitle = "display overlay",
+        badgeTitle = "Renderer",
+        badgeSubtitle = "Susano overlay active",
+        badgePill = "SUSANO",
+        themePill = tostring(Menu.CurrentTheme or "Blue"),
+        keyPill = SDM_GetMenuToggleLabel()
+    }
+
+    if Menu.ShouldUseNuiDisplayMenu and Menu.ShouldUseNuiDisplayMenu() then
+        info.brandSubtitle = "web display"
+        info.badgeSubtitle = "NUI online"
+        info.badgePill = "NUI"
+        return info
+    end
+
+    if ArcaneCanUseDuiDisplayMenu() then
+        if Menu.DuiDisplayMenuTextureHandle then
+            info.brandSubtitle = "html display"
+            info.badgeSubtitle = "DUI online"
+            info.badgePill = "HTML"
+        elseif Menu.DuiDisplayMenuInitError == "assets" then
+            info.badgeSubtitle = "DUI assets error"
+        elseif Menu.DuiDisplayMenuInitError == "create" then
+            info.badgeSubtitle = "DUI browser error"
+        elseif Menu.DuiDisplayMenuInitError == "load" then
+            info.badgeSubtitle = "DUI load timeout"
+        elseif Menu.DuiDisplayMenuInitError == "texture" then
+            info.badgeSubtitle = "DUI texture error"
+        elseif Menu.DuiDisplayMenuObject then
+            info.badgeSubtitle = "DUI loading"
+        else
+            info.badgeSubtitle = "DUI pending"
+        end
+        return info
+    end
+
+    local missing = ArcaneGetMissingDuiCoreNatives()
+    if #missing > 0 then
+        info.badgeSubtitle = "No " .. tostring(missing[1])
+    end
+
+    return info
+end
+
 local function SDM_DrawCategoryIcon(category, x, y, size, selected, accentR, accentG, accentB)
-    local lineR = selected and accentR or 214
-    local lineG = selected and accentG or 218
-    local lineB = selected and accentB or 228
-    local bgR = selected and accentR or 34
-    local bgG = selected and accentG or 36
+    local lineR = selected and 248 or 223
+    local lineG = selected and 250 or 228
+    local lineB = selected and 252 or 235
+    local bgR = selected and accentR or 31
+    local bgG = selected and accentG or 35
     local bgB = selected and accentB or 46
     local radius = math.max(5, size * 0.28)
+    local glyph = SDM_GetCategoryMonogram(category and category.name or "")
 
-    SDM_DrawRect(x, y, size, size, bgR, bgG, bgB, selected and 0.22 or 0.12, radius)
-    SDM_DrawOutline(x, y, size, size, 72, 74, 90, selected and 170 or 120, 1)
-
-    local name = string.lower(tostring(category and category.name or ""))
-    if not (Susano and Susano.DrawLine) then
-        local glyph = SDM_GetGlyph(category)
-        local glyphW = SDM_TextWidth(glyph, 12)
-        SDM_DrawText(x + math.floor((size - glyphW) / 2), y + SDM_Scale(4, 1.0), glyph, 12, lineR, lineG, lineB, 1.0)
-        return
-    end
-
-    local function L(x1, y1, x2, y2, thickness)
-        SDM_DrawLineSafe(x1, y1, x2, y2, lineR, lineG, lineB, 1.0, thickness or 1.7)
-    end
-
-    local function C(cx, cy, r, filled, thickness)
-        if not SDM_DrawCircleSafe(cx, cy, r, filled, lineR, lineG, lineB, 1.0, thickness or 1.6, 20) then
-            SDM_DrawRect(cx - r, cy - r, r * 2, r * 2, lineR, lineG, lineB, 1.0, r)
-        end
-    end
-
-    if name == "player" or name == "miguelin" then
-        C(x + (size * 0.50), y + (size * 0.34), size * 0.16, false, 1.8)
-        L(x + (size * 0.50), y + (size * 0.50), x + (size * 0.50), y + (size * 0.74), 1.8)
-        L(x + (size * 0.34), y + (size * 0.59), x + (size * 0.66), y + (size * 0.59), 1.8)
-        L(x + (size * 0.39), y + (size * 0.88), x + (size * 0.50), y + (size * 0.74), 1.8)
-        L(x + (size * 0.61), y + (size * 0.88), x + (size * 0.50), y + (size * 0.74), 1.8)
-    elseif name == "online" then
-        C(x + (size * 0.38), y + (size * 0.36), size * 0.11, false, 1.7)
-        C(x + (size * 0.62), y + (size * 0.36), size * 0.11, false, 1.7)
-        C(x + (size * 0.50), y + (size * 0.58), size * 0.13, false, 1.7)
-        L(x + (size * 0.28), y + (size * 0.70), x + (size * 0.72), y + (size * 0.70), 1.7)
-    elseif name == "visual" then
-        L(x + (size * 0.14), y + (size * 0.50), x + (size * 0.31), y + (size * 0.30), 1.7)
-        L(x + (size * 0.31), y + (size * 0.30), x + (size * 0.69), y + (size * 0.30), 1.7)
-        L(x + (size * 0.69), y + (size * 0.30), x + (size * 0.86), y + (size * 0.50), 1.7)
-        L(x + (size * 0.86), y + (size * 0.50), x + (size * 0.69), y + (size * 0.70), 1.7)
-        L(x + (size * 0.69), y + (size * 0.70), x + (size * 0.31), y + (size * 0.70), 1.7)
-        L(x + (size * 0.31), y + (size * 0.70), x + (size * 0.14), y + (size * 0.50), 1.7)
-        C(x + (size * 0.50), y + (size * 0.50), size * 0.10, true, 1.6)
-    elseif name == "combat" then
-        C(x + (size * 0.50), y + (size * 0.50), size * 0.13, false, 1.7)
-        L(x + (size * 0.50), y + (size * 0.10), x + (size * 0.50), y + (size * 0.28), 1.7)
-        L(x + (size * 0.50), y + (size * 0.72), x + (size * 0.50), y + (size * 0.90), 1.7)
-        L(x + (size * 0.10), y + (size * 0.50), x + (size * 0.28), y + (size * 0.50), 1.7)
-        L(x + (size * 0.72), y + (size * 0.50), x + (size * 0.90), y + (size * 0.50), 1.7)
-    elseif name == "vehicle" then
-        SDM_DrawRect(x + (size * 0.18), y + (size * 0.42), size * 0.64, size * 0.18, lineR, lineG, lineB, 0.10, 3)
-        L(x + (size * 0.28), y + (size * 0.42), x + (size * 0.40), y + (size * 0.26), 1.7)
-        L(x + (size * 0.40), y + (size * 0.26), x + (size * 0.66), y + (size * 0.26), 1.7)
-        L(x + (size * 0.66), y + (size * 0.26), x + (size * 0.78), y + (size * 0.42), 1.7)
-        C(x + (size * 0.33), y + (size * 0.66), size * 0.08, false, 1.7)
-        C(x + (size * 0.67), y + (size * 0.66), size * 0.08, false, 1.7)
-    elseif name == "settings" then
-        C(x + (size * 0.50), y + (size * 0.50), size * 0.13, false, 1.7)
-        C(x + (size * 0.50), y + (size * 0.50), size * 0.04, true, 1.5)
-        L(x + (size * 0.50), y + (size * 0.10), x + (size * 0.50), y + (size * 0.24), 1.7)
-        L(x + (size * 0.50), y + (size * 0.76), x + (size * 0.50), y + (size * 0.90), 1.7)
-        L(x + (size * 0.10), y + (size * 0.50), x + (size * 0.24), y + (size * 0.50), 1.7)
-        L(x + (size * 0.76), y + (size * 0.50), x + (size * 0.90), y + (size * 0.50), 1.7)
-        L(x + (size * 0.22), y + (size * 0.22), x + (size * 0.31), y + (size * 0.31), 1.7)
-        L(x + (size * 0.69), y + (size * 0.69), x + (size * 0.78), y + (size * 0.78), 1.7)
-        L(x + (size * 0.22), y + (size * 0.78), x + (size * 0.31), y + (size * 0.69), 1.7)
-        L(x + (size * 0.69), y + (size * 0.31), x + (size * 0.78), y + (size * 0.22), 1.7)
-    elseif name == "miscellaneous" then
-        L(x + (size * 0.18), y + (size * 0.28), x + (size * 0.82), y + (size * 0.28), 1.7)
-        L(x + (size * 0.18), y + (size * 0.50), x + (size * 0.82), y + (size * 0.50), 1.7)
-        L(x + (size * 0.18), y + (size * 0.72), x + (size * 0.82), y + (size * 0.72), 1.7)
-        C(x + (size * 0.35), y + (size * 0.28), size * 0.06, true, 1.5)
-        C(x + (size * 0.60), y + (size * 0.50), size * 0.06, true, 1.5)
-        C(x + (size * 0.44), y + (size * 0.72), size * 0.06, true, 1.5)
-    elseif name == "farmeo coca" then
-        SDM_DrawOutline(x + (size * 0.22), y + (size * 0.24), size * 0.56, size * 0.56, lineR, lineG, lineB, 255, 1)
-        L(x + (size * 0.22), y + (size * 0.24), x + (size * 0.78), y + (size * 0.80), 1.7)
-        L(x + (size * 0.78), y + (size * 0.24), x + (size * 0.22), y + (size * 0.80), 1.7)
-    else
-        local glyph = SDM_GetGlyph(category)
-        local glyphW = SDM_TextWidth(glyph, 12)
-        SDM_DrawText(x + math.floor((size - glyphW) / 2), y + SDM_Scale(4, 1.0), glyph, 12, lineR, lineG, lineB, 1.0)
-    end
+    SDM_DrawRect(x, y, size, size, bgR, bgG, bgB, selected and 0.20 or 0.10, radius)
+    SDM_DrawOutline(x, y, size, size, selected and accentR or 68, selected and accentG or 74, selected and accentB or 88, selected and 132 or 106, 1)
+    local glyphW = SDM_TextWidth(glyph, 11)
+    SDM_DrawText(x + math.floor((size - glyphW) / 2), y + math.floor((size - SDM_Scale(13, 1.0)) / 2) - 1, glyph, 11, lineR, lineG, lineB, 1.0)
 end
 
 local function SDM_FormatValue(value)
@@ -4428,8 +4435,8 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
     local areaY = panelY + (layout.headerHeight * scale) + padding
     local areaW = panelW - sidebarW - (padding * 2)
     local areaH = panelH - (layout.headerHeight * scale) - footerH - (padding * 2)
-    local heroH = SDM_Scale(58, scale)
-    local heroGap = SDM_Scale(14, scale)
+    local heroH = SDM_Scale(52, scale)
+    local heroGap = SDM_Scale(12, scale)
     local sectionAreaY = areaY + heroH + heroGap
     local sectionAreaH = math.max(SDM_Scale(160, scale), areaH - heroH - heroGap)
     local map = {
@@ -4474,12 +4481,19 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
 
     local tabs = (openedCategory and openedCategory.tabs) or {}
     local tabGap = SDM_Scale(layout.tabGap, scale)
-    local tabWidth = (areaW - (tabGap * math.max(0, #tabs - 1))) / math.max(1, #tabs)
+    local rendererInfo = SDM_GetDisplayRendererInfo()
+    local titleReserveW = math.max(SDM_Scale(190, scale), SDM_TextWidth(tostring(openedCategory and openedCategory.name or "Category"), 26) + SDM_Scale(84, scale))
+    local themePillW = SDM_TextWidth(rendererInfo.themePill or "", 9) + SDM_Scale(26, scale)
+    local keyPillW = SDM_TextWidth(rendererInfo.keyPill or "", 9) + SDM_Scale(26, scale)
+    local rightReserveW = themePillW + keyPillW + SDM_Scale(52, scale)
+    local tabStartX = areaX + titleReserveW
+    local tabAreaW = math.max(SDM_Scale(250, scale), areaW - titleReserveW - rightReserveW)
+    local tabWidth = (tabAreaW - (tabGap * math.max(0, #tabs - 1))) / math.max(1, #tabs)
     for index, tab in ipairs(tabs) do
         map.tabButtons[#map.tabButtons + 1] = {
             tabIndex = index,
             tab = tab,
-            x = areaX + ((index - 1) * (tabWidth + tabGap)),
+            x = tabStartX + ((index - 1) * (tabWidth + tabGap)),
             y = panelY + SDM_Scale(12, scale),
             w = tabWidth,
             h = SDM_Scale(layout.tabHeight, scale)
@@ -4710,6 +4724,7 @@ function Menu.BuildDuiDisplayMenuPayload(openedCategory, currentTab, map, panelX
     local screenW, screenH = MenuGetScreenSize()
     local layout = Menu.DisplayMenuLayout
     local accent = Menu.Colors and Menu.Colors.SelectedBg or { r = 0, g = 221, b = 255 }
+    local rendererInfo = SDM_GetDisplayRendererInfo()
     local padding = SDM_Scale(layout.padding, scale)
     local sidebarW = layout.sidebarWidth * scale
     local footerH = SDM_Scale(layout.footerHeight, scale)
@@ -4799,18 +4814,18 @@ function Menu.BuildDuiDisplayMenuPayload(openedCategory, currentTab, map, panelX
         },
         brand = {
             title = "arcane",
-            subtitle = "susano display overlay"
+            subtitle = rendererInfo.brandSubtitle
         },
         sidebarBadge = {
-            title = "Client-side executor",
-            subtitle = "Overlay mode active",
-            pill = "MENU KEY " .. keyLabel
+            title = rendererInfo.badgeTitle,
+            subtitle = rendererInfo.badgeSubtitle,
+            pill = rendererInfo.badgePill
         },
         header = {
             title = tostring(openedCategory and openedCategory.name or "Arcane"),
-            subtitle = "Focused tab: " .. tostring(currentTab and currentTab.name or "Tab"),
-            themeText = "THEME  " .. tostring(Menu.CurrentTheme or "Blue"),
-            keyText = "MENU KEY  " .. keyLabel
+            subtitle = "Tab: " .. tostring(currentTab and currentTab.name or "Tab"),
+            themeText = rendererInfo.themePill,
+            keyText = rendererInfo.keyPill
         },
         hero = {
             title = tostring(currentTab and currentTab.name or "Options"),
@@ -4914,17 +4929,18 @@ Menu.DrawDisplayMenu = function()
     local padding = SDM_Scale(layout.padding, scale)
     local mainX = panelX + sidebarW
     local mainW = panelW - sidebarW
+    local rendererInfo = SDM_GetDisplayRendererInfo()
 
-    SDM_DrawRect(0, 0, screenW, screenH, 4, 7, 13, 122)
-    SDM_DrawRect(panelX + SDM_Scale(12, scale), panelY + SDM_Scale(18, scale), panelW, panelH, 0, 0, 0, 82, radius + SDM_Scale(10, scale))
-    SDM_DrawRect(panelX, panelY, panelW, panelH, 12, 14, 20, 252, radius)
-    SDM_DrawOutline(panelX, panelY, panelW, panelH, 61, 67, 82, 175, 1)
-    SDM_DrawRect(panelX, panelY, sidebarW, panelH, 18, 21, 30, 255, radius)
-    SDM_DrawRect(mainX, panelY, mainW, panelH, 11, 13, 19, 242, radius)
-    SDM_DrawGradientBar(mainX + padding, panelY + SDM_Scale(18, scale), mainW - (padding * 2), SDM_Scale(72, scale), accentR, accentG, accentB, 52, SDM_Scale(16, scale))
-    SDM_DrawRect(mainX, panelY, mainW, SDM_Scale(layout.headerHeight, scale), 15, 18, 26, 210, radius)
-    SDM_DrawRect(panelX, panelY + panelH - footerH, panelW, footerH, 10, 12, 17, 255, radius)
-    SDM_DrawRect(panelX + sidebarW - SDM_Scale(1, scale), panelY + SDM_Scale(18, scale), SDM_Scale(1, scale), panelH - SDM_Scale(36, scale), 38, 42, 54, 220)
+    SDM_DrawRect(0, 0, screenW, screenH, 5, 7, 12, 110)
+    SDM_DrawRect(panelX + SDM_Scale(10, scale), panelY + SDM_Scale(14, scale), panelW, panelH, 0, 0, 0, 70, radius + SDM_Scale(12, scale))
+    SDM_DrawRect(panelX, panelY, panelW, panelH, 12, 14, 20, 248, radius)
+    SDM_DrawOutline(panelX, panelY, panelW, panelH, 66, 72, 88, 120, 1)
+    SDM_DrawRect(panelX, panelY, sidebarW, panelH, 17, 20, 29, 252, radius)
+    SDM_DrawRect(mainX, panelY, mainW, panelH, 9, 12, 18, 236, radius)
+    SDM_DrawGradientBar(mainX + padding, panelY + SDM_Scale(14, scale), mainW - (padding * 2), SDM_Scale(68, scale), accentR, accentG, accentB, 34, SDM_Scale(16, scale))
+    SDM_DrawRect(mainX, panelY, mainW, SDM_Scale(layout.headerHeight, scale), 13, 16, 23, 192, radius)
+    SDM_DrawRect(panelX, panelY + panelH - footerH, panelW, footerH, 9, 11, 16, 252, radius)
+    SDM_DrawRect(panelX + sidebarW - SDM_Scale(1, scale), panelY + SDM_Scale(18, scale), SDM_Scale(1, scale), panelH - SDM_Scale(36, scale), 34, 38, 48, 190)
 
     local badgeSize = SDM_Scale(22, scale)
     local badgeX = panelX + SDM_Scale(layout.padding, scale)
@@ -4932,13 +4948,13 @@ Menu.DrawDisplayMenu = function()
     SDM_DrawRect(badgeX, badgeY, badgeSize, badgeSize, accentR, accentG, accentB, 255, math.max(4, badgeSize * 0.34))
     SDM_DrawRect(badgeX + SDM_Scale(5, scale), badgeY + SDM_Scale(5, scale), badgeSize - SDM_Scale(10, scale), badgeSize - SDM_Scale(10, scale), 12, 14, 20, 255, math.max(3, badgeSize * 0.24))
     SDM_DrawText(badgeX + badgeSize + SDM_Scale(12, scale), badgeY - SDM_Scale(2, scale), "arcane", 27, 245, 245, 248, 1.0)
-    SDM_DrawText(badgeX + badgeSize + SDM_Scale(12, scale), badgeY + SDM_Scale(23, scale), "susano display overlay", 11, 122, 129, 146, 1.0)
+    SDM_DrawText(badgeX + badgeSize + SDM_Scale(12, scale), badgeY + SDM_Scale(23, scale), rendererInfo.brandSubtitle, 10, 122, 129, 146, 1.0)
 
-    SDM_DrawRect(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 24, 27, 36, 255, SDM_Scale(12, scale))
-    SDM_DrawOutline(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 45, 50, 66, 215, 1)
-    SDM_DrawText(map.searchRect.x + SDM_Scale(12, scale), map.searchRect.y + SDM_Scale(10, scale), "Client-side executor", 11, accentR, accentG, accentB, 1.0)
-    SDM_DrawText(map.searchRect.x + SDM_Scale(12, scale), map.searchRect.y + SDM_Scale(26, scale), "Overlay mode active", 12, 226, 228, 235, 1.0)
-    local buildText = "MENU KEY " .. SDM_GetMenuToggleLabel()
+    SDM_DrawRect(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 21, 24, 33, 244, SDM_Scale(12, scale))
+    SDM_DrawOutline(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 42, 46, 61, 155, 1)
+    SDM_DrawText(map.searchRect.x + SDM_Scale(12, scale), map.searchRect.y + SDM_Scale(8, scale), rendererInfo.badgeTitle, 10, accentR, accentG, accentB, 1.0)
+    SDM_DrawText(map.searchRect.x + SDM_Scale(12, scale), map.searchRect.y + SDM_Scale(24, scale), rendererInfo.badgeSubtitle, 11, 226, 228, 235, 1.0)
+    local buildText = rendererInfo.badgePill
     local buildW = SDM_TextWidth(buildText, 10) + 16
     SDM_DrawPill(map.searchRect.x + map.searchRect.w - buildW - SDM_Scale(18, scale), map.searchRect.y + SDM_Scale(12, scale), buildText, 10, 35, 39, 50, 255, 173, 179, 193)
 
@@ -4961,20 +4977,20 @@ Menu.DrawDisplayMenu = function()
         SDM_DrawText(iconX + iconSize + SDM_Scale(12, scale), button.y + SDM_Scale(23, scale), isSelected and "module active" or "module", 10, 118, 124, 141, 1.0)
     end
 
-    SDM_DrawText(mainX + padding, panelY + SDM_Scale(18, scale), tostring(opened.name or "Category"), 28, 244, 245, 248, 1.0)
-    SDM_DrawText(mainX + padding, panelY + SDM_Scale(48, scale), "Focused tab: " .. tostring(currentTab.name or "Tab"), 12, 146, 153, 169, 1.0)
-    local pillY = panelY + SDM_Scale(20, scale)
+    SDM_DrawText(mainX + padding, panelY + SDM_Scale(18, scale), tostring(opened.name or "Category"), 26, 244, 245, 248, 1.0)
+    SDM_DrawText(mainX + padding, panelY + SDM_Scale(46, scale), "Tab: " .. tostring(currentTab.name or "Tab"), 11, 146, 153, 169, 1.0)
+    local pillY = panelY + SDM_Scale(16, scale)
     local rightEdge = panelX + panelW - padding
-    local keyText = "MENU KEY  " .. SDM_GetMenuToggleLabel()
-    local keyW = SDM_TextWidth(keyText, 10) + 16
-    local themeText = "THEME  " .. tostring(Menu.CurrentTheme or "Blue")
-    local themeW = SDM_TextWidth(themeText, 10) + 16
-    SDM_DrawPill(rightEdge - keyW, pillY, keyText, 10, 26, 30, 40, 255, 223, 227, 236)
-    SDM_DrawPill(rightEdge - keyW - themeW - SDM_Scale(10, scale), pillY, themeText, 10, accentR, accentG, accentB, 72, 240, 244, 248)
-    SDM_DrawRect(map.contentArea.x, map.contentArea.y, map.contentArea.w, map.visualContentHeight or map.contentArea.h, 15, 18, 25, 112, SDM_Scale(18, scale))
-    SDM_DrawRect(map.contentArea.x, map.contentArea.y, map.contentArea.w, SDM_Scale(56, scale), 255, 255, 255, 4, SDM_Scale(18, scale))
-    SDM_DrawText(map.contentArea.x + SDM_Scale(16, scale), map.contentArea.y + SDM_Scale(12, scale), tostring(currentTab.name or "Options"), 18, 240, 242, 247, 1.0)
-    SDM_DrawText(map.contentArea.x + SDM_Scale(16, scale), map.contentArea.y + SDM_Scale(33, scale), string.format("%d live option%s", map.totalItems, map.totalItems == 1 and "" or "s"), 11, 132, 140, 158, 1.0)
+    local keyText = rendererInfo.keyPill
+    local keyW = SDM_TextWidth(keyText, 9) + 14
+    local themeText = rendererInfo.themePill
+    local themeW = SDM_TextWidth(themeText, 9) + 14
+    SDM_DrawPill(rightEdge - keyW, pillY, keyText, 9, 24, 28, 37, 255, 223, 227, 236)
+    SDM_DrawPill(rightEdge - keyW - themeW - SDM_Scale(8, scale), pillY, themeText, 9, accentR, accentG, accentB, 62, 240, 244, 248)
+    SDM_DrawRect(map.contentArea.x, map.contentArea.y, map.contentArea.w, map.visualContentHeight or map.contentArea.h, 14, 17, 24, 88, SDM_Scale(18, scale))
+    SDM_DrawRect(map.contentArea.x, map.contentArea.y, map.contentArea.w, SDM_Scale(52, scale), 255, 255, 255, 3, SDM_Scale(18, scale))
+    SDM_DrawText(map.contentArea.x + SDM_Scale(16, scale), map.contentArea.y + SDM_Scale(10, scale), tostring(currentTab.name or "Options"), 16, 240, 242, 247, 1.0)
+    SDM_DrawText(map.contentArea.x + SDM_Scale(16, scale), map.contentArea.y + SDM_Scale(29, scale), string.format("%d live option%s", map.totalItems, map.totalItems == 1 and "" or "s"), 10, 132, 140, 158, 1.0)
 
     for _, tabButton in ipairs(map.tabButtons) do
         local isActive = tabButton.tabIndex == Menu.CurrentTab
