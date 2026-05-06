@@ -5168,6 +5168,9 @@ local function AdjustSelectorItem(item, direction, invokeCallback)
         end
     end
 end
+if type(_G) == "table" then
+    _G.AdjustSelectorItem = AdjustSelectorItem
+end
 
 local function ApplySliderSpecialCases(item)
     if not item then
@@ -5226,6 +5229,9 @@ local function SetSliderItemFromPercent(item, percent, isToggleSlider)
         end
     end
 end
+if type(_G) == "table" then
+    _G.SetSliderItemFromPercent = SetSliderItemFromPercent
+end
 
 local function TriggerPrimaryItemAction(item)
     if not item or item.isSeparator then
@@ -5273,6 +5279,9 @@ local function TriggerPrimaryItemAction(item)
     elseif item.type == "selector" then
         AdjustSelectorItem(item, 1, true)
     end
+end
+if type(_G) == "table" then
+    _G.TriggerPrimaryItemAction = TriggerPrimaryItemAction
 end
 
 local function GetMenuBoundsForMouse()
