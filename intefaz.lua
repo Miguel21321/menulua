@@ -1,3 +1,8 @@
+if type(_G) == "table" and type(_G.__ARCANE_DUI_CLEANUP) == "function" then
+    pcall(_G.__ARCANE_DUI_CLEANUP)
+    _G.__ARCANE_DUI_CLEANUP = nil
+end
+
 local Menu = {}
 Menu.Visible = false
 Menu.CurrentCategory = 2
@@ -66,12 +71,40 @@ local function ArcaneHasResourceUiPage()
     return metadataOk and type(uiPage) == "string" and uiPage ~= ""
 end
 
+local function ArcaneCanUseDuiDisplayMenu()
+    return type(CreateDui) == "function"
+        and type(GetDuiHandle) == "function"
+        and type(CreateRuntimeTxd) == "function"
+        and type(CreateRuntimeTextureFromDuiHandle) == "function"
+        and type(IsDuiAvailable) == "function"
+        and type(DestroyDui) == "function"
+        and type(SendDuiMessage) == "function"
+        and type(DrawSprite) == "function"
+end
+
 Menu.ClickableMenu = false
 Menu.DisplayMenu = false
 Menu.NuiDisplayMenuSupported = ArcaneHasResourceUiPage()
     and type(SendNUIMessage) == "function"
     and type(SetNuiFocus) == "function"
     and type(RegisterNUICallback) == "function"
+Menu.DuiDisplayMenuSupported = ArcaneCanUseDuiDisplayMenu()
+Menu.DuiDisplayMenuVisible = false
+Menu.DuiDisplayMenuDirty = true
+Menu.DuiDisplayMenuLastSyncAt = 0
+Menu.DuiDisplayMenuSyncInterval = 75
+Menu.DuiDisplayMenuObject = nil
+Menu.DuiDisplayMenuHandle = nil
+Menu.DuiDisplayMenuTxdHandle = nil
+Menu.DuiDisplayMenuTextureHandle = nil
+Menu.DuiDisplayMenuTxdName = nil
+Menu.DuiDisplayMenuTxnName = nil
+Menu.DuiDisplayMenuWidth = 0
+Menu.DuiDisplayMenuHeight = 0
+Menu.DuiDisplayMenuHtml = nil
+Menu.DuiDisplayMenuInitError = nil
+Menu.DuiDisplayMenuMouseLeftDown = false
+Menu.DuiDisplayMenuMouseRightDown = false
 Menu.NuiDisplayMenuVisible = false
 Menu.NuiDisplayMenuFocused = false
 Menu.NuiDisplayMenuDirty = true
@@ -526,6 +559,269 @@ local function MenuGetScreenSize()
     end
 
     return 1920, 1080
+end
+
+local function ArcaneReadMenuTextFile(relativePath)
+    if type(relativePath) ~= "string" or relativePath == "" then
+        return nil
+    end
+
+    if type(LoadResourceFile) == "function" and type(GetCurrentResourceName) == "function" then
+        local ok, data = pcall(function()
+            return LoadResourceFile(GetCurrentResourceName(), relativePath)
+        end)
+
+        if ok and type(data) == "string" and data ~= "" then
+            return data
+        end
+    end
+
+    if io and type(io.open) == "function" then
+        local ok, handle = pcall(function()
+            return io.open(relativePath, "rb")
+        end)
+
+        if ok and handle then
+            local readOk, data = pcall(function()
+                local content = handle:read("*a")
+                handle:close()
+                return content
+            end)
+
+            if readOk and type(data) == "string" and data ~= "" then
+                return data
+            end
+        end
+    end
+
+    return nil
+end
+
+local function ArcaneIsArray(value)
+    if type(value) ~= "table" then
+        return false
+    end
+
+    local maxIndex = 0
+    local count = 0
+    for key in pairs(value) do
+        if type(key) ~= "number" or key < 1 or key % 1 ~= 0 then
+            return false
+        end
+        if key > maxIndex then
+            maxIndex = key
+        end
+        count = count + 1
+    end
+
+    return maxIndex == count
+end
+
+local function ArcaneJsonEscape(value)
+    local escaped = tostring(value or "")
+    escaped = escaped:gsub("\\", "\\\\")
+    escaped = escaped:gsub("\"", "\\\"")
+    escaped = escaped:gsub("\b", "\\b")
+    escaped = escaped:gsub("\f", "\\f")
+    escaped = escaped:gsub("\n", "\\n")
+    escaped = escaped:gsub("\r", "\\r")
+    escaped = escaped:gsub("\t", "\\t")
+    escaped = escaped:gsub("[%z\1-\31]", function(char)
+        return string.format("\\u%04X", string.byte(char))
+    end)
+    return "\"" .. escaped .. "\""
+end
+
+local function ArcaneJsonEncode(value)
+    local valueType = type(value)
+    if valueType == "nil" then
+        return "null"
+    end
+
+    if valueType == "number" then
+        if value ~= value or value == math.huge or value == -math.huge then
+            return "0"
+        end
+        return tostring(value)
+    end
+
+    if valueType == "boolean" then
+        return value and "true" or "false"
+    end
+
+    if valueType == "string" then
+        return ArcaneJsonEscape(value)
+    end
+
+    if valueType ~= "table" then
+        return ArcaneJsonEscape(tostring(value))
+    end
+
+    if ArcaneIsArray(value) then
+        local parts = {}
+        for index = 1, #value do
+            parts[index] = ArcaneJsonEncode(value[index])
+        end
+        return "[" .. table.concat(parts, ",") .. "]"
+    end
+
+    local parts = {}
+    for key, entry in pairs(value) do
+        parts[#parts + 1] = ArcaneJsonEscape(tostring(key)) .. ":" .. ArcaneJsonEncode(entry)
+    end
+    return "{" .. table.concat(parts, ",") .. "}"
+end
+
+local function ArcaneUrlEncode(value)
+    local raw = tostring(value or "")
+    return (raw:gsub("\n", "\r\n"):gsub("([^%w%-_%.~ ])", function(char)
+        return string.format("%%%02X", string.byte(char))
+    end):gsub(" ", "%%20"))
+end
+
+local function ArcaneBuildDuiHtml()
+    local html = ArcaneReadMenuTextFile("ui/dui.html")
+    local css = ArcaneReadMenuTextFile("ui/dui.css")
+    local js = ArcaneReadMenuTextFile("ui/dui.js")
+    if not html or not css or not js then
+        return nil
+    end
+
+    html = html:gsub('<link%s+rel="stylesheet"%s+href="dui.css"%s*/?>', "<style>\n" .. css .. "\n</style>", 1)
+    html = html:gsub('<script%s+src="dui.js"%s*></script>', '<script>window.__ARCANE_DUI__ = true;</script><script>\n' .. js .. '\n</script>', 1)
+    return html
+end
+
+function Menu.ShouldUseDuiDisplayMenu()
+    return Menu.DuiDisplayMenuSupported == true and not Menu.ShouldUseNuiDisplayMenu()
+end
+
+function Menu.DestroyDuiDisplayMenu()
+    if Menu.DuiDisplayMenuObject then
+        pcall(DestroyDui, Menu.DuiDisplayMenuObject)
+    end
+
+    Menu.DuiDisplayMenuObject = nil
+    Menu.DuiDisplayMenuHandle = nil
+    Menu.DuiDisplayMenuTxdHandle = nil
+    Menu.DuiDisplayMenuTextureHandle = nil
+    Menu.DuiDisplayMenuTxdName = nil
+    Menu.DuiDisplayMenuTxnName = nil
+    Menu.DuiDisplayMenuVisible = false
+    Menu.DuiDisplayMenuWidth = 0
+    Menu.DuiDisplayMenuHeight = 0
+    Menu.DuiDisplayMenuInitError = nil
+    Menu.DuiDisplayMenuMouseLeftDown = false
+    Menu.DuiDisplayMenuMouseRightDown = false
+end
+
+local function EnsureDuiDisplayMenuReady(screenW, screenH)
+    if not Menu.ShouldUseDuiDisplayMenu() then
+        return false
+    end
+
+    local targetW = math.max(1280, math.floor(screenW or 0))
+    local targetH = math.max(720, math.floor(screenH or 0))
+
+    if Menu.DuiDisplayMenuObject and (Menu.DuiDisplayMenuWidth ~= targetW or Menu.DuiDisplayMenuHeight ~= targetH) then
+        Menu.DestroyDuiDisplayMenu()
+    end
+
+    if not Menu.DuiDisplayMenuHtml then
+        Menu.DuiDisplayMenuHtml = ArcaneBuildDuiHtml()
+        if not Menu.DuiDisplayMenuHtml then
+            if Menu.DuiDisplayMenuInitError ~= "assets" then
+                Menu.DuiDisplayMenuInitError = "assets"
+                print("Arcane DUI error: could not read ui/dui.html, ui/dui.css or ui/dui.js")
+            end
+            return false
+        end
+    end
+
+    if not Menu.DuiDisplayMenuObject then
+        local encodedHtml = ArcaneUrlEncode(Menu.DuiDisplayMenuHtml)
+        local duiUrl = "data:text/html;charset=utf-8," .. encodedHtml
+        local suffix = tostring(math.floor((GetGameTimer and GetGameTimer() or 0) + math.random(1000, 9999)))
+
+        Menu.DuiDisplayMenuTxdName = "arcane_dui_txd_" .. suffix
+        Menu.DuiDisplayMenuTxnName = "arcane_dui_txn_" .. suffix
+        Menu.DuiDisplayMenuObject = CreateDui(duiUrl, targetW, targetH)
+        Menu.DuiDisplayMenuWidth = targetW
+        Menu.DuiDisplayMenuHeight = targetH
+        Menu.DuiDisplayMenuTxdHandle = CreateRuntimeTxd(Menu.DuiDisplayMenuTxdName)
+        if not Menu.DuiDisplayMenuObject and Menu.DuiDisplayMenuInitError ~= "create" then
+            Menu.DuiDisplayMenuInitError = "create"
+            print("Arcane DUI error: CreateDui returned nil")
+        end
+    end
+
+    if not Menu.DuiDisplayMenuObject then
+        return false
+    end
+
+    if not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
+        return false
+    end
+
+    if not Menu.DuiDisplayMenuHandle then
+        Menu.DuiDisplayMenuHandle = GetDuiHandle(Menu.DuiDisplayMenuObject)
+    end
+
+    if Menu.DuiDisplayMenuHandle and Menu.DuiDisplayMenuTxdHandle and not Menu.DuiDisplayMenuTextureHandle then
+        Menu.DuiDisplayMenuTextureHandle = CreateRuntimeTextureFromDuiHandle(Menu.DuiDisplayMenuTxdHandle, Menu.DuiDisplayMenuTxnName, Menu.DuiDisplayMenuHandle)
+        if not Menu.DuiDisplayMenuTextureHandle and Menu.DuiDisplayMenuInitError ~= "texture" then
+            Menu.DuiDisplayMenuInitError = "texture"
+            print("Arcane DUI error: CreateRuntimeTextureFromDuiHandle failed")
+        end
+    end
+
+    return Menu.DuiDisplayMenuTextureHandle ~= nil
+end
+
+function Menu.SyncDuiDisplayMenuMessage(payload)
+    if not Menu.DuiDisplayMenuObject or not payload then
+        return
+    end
+
+    local encoded = ArcaneJsonEncode(payload)
+    pcall(SendDuiMessage, Menu.DuiDisplayMenuObject, encoded)
+end
+
+function Menu.UpdateDuiDisplayMenuMouse(mouseX, mouseY, leftDown, rightDown)
+    if not Menu.ShouldUseDuiDisplayMenu() or not Menu.DuiDisplayMenuObject or not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
+        return
+    end
+
+    if mouseX and mouseY and type(SendDuiMouseMove) == "function" then
+        pcall(SendDuiMouseMove, Menu.DuiDisplayMenuObject, math.floor(mouseX + 0.5), math.floor(mouseY + 0.5))
+    end
+
+    if type(SendDuiMouseDown) == "function" and leftDown and not Menu.DuiDisplayMenuMouseLeftDown then
+        pcall(SendDuiMouseDown, Menu.DuiDisplayMenuObject, "left")
+    end
+
+    if type(SendDuiMouseUp) == "function" and not leftDown and Menu.DuiDisplayMenuMouseLeftDown then
+        pcall(SendDuiMouseUp, Menu.DuiDisplayMenuObject, "left")
+    end
+
+    if type(SendDuiMouseDown) == "function" and rightDown and not Menu.DuiDisplayMenuMouseRightDown then
+        pcall(SendDuiMouseDown, Menu.DuiDisplayMenuObject, "right")
+    end
+
+    if type(SendDuiMouseUp) == "function" and not rightDown and Menu.DuiDisplayMenuMouseRightDown then
+        pcall(SendDuiMouseUp, Menu.DuiDisplayMenuObject, "right")
+    end
+
+    Menu.DuiDisplayMenuMouseLeftDown = leftDown == true
+    Menu.DuiDisplayMenuMouseRightDown = rightDown == true
+end
+
+if type(_G) == "table" then
+    _G.__ARCANE_DUI_CLEANUP = function()
+        if Menu and Menu.DestroyDuiDisplayMenu then
+            Menu.DestroyDuiDisplayMenu()
+        end
+    end
 end
 
 local function SetInteractiveOverlayState(enable)
@@ -4270,11 +4566,257 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
     return map
 end
 
+local function SDM_CopyRect(rect)
+    if not rect then
+        return nil
+    end
+
+    return {
+        x = math.floor((rect.x or 0) + 0.5),
+        y = math.floor((rect.y or 0) + 0.5),
+        w = math.floor((rect.w or 0) + 0.5),
+        h = math.floor((rect.h or 0) + 0.5)
+    }
+end
+
+local function SDM_GetCategoryMonogram(label)
+    local cleaned = tostring(label or ""):gsub("^%s+", ""):gsub("%s+$", "")
+    if cleaned == "" then
+        return "AR"
+    end
+
+    local letters = {}
+    for chunk in cleaned:gmatch("%S+") do
+        letters[#letters + 1] = string.sub(chunk, 1, 1)
+        if #letters >= 2 then
+            break
+        end
+    end
+
+    return string.upper(table.concat(letters))
+end
+
+local function SDM_SerializeRow(row)
+    if not row or not row.item or not row.rowRect then
+        return nil
+    end
+
+    local item = row.item
+    local payload = {
+        itemIndex = row.itemIndex,
+        kind = item.type or "action",
+        label = item.name or "",
+        bindLabel = item.bindKeyName or (item.bindKey and Menu.GetKeyName and Menu.GetKeyName(item.bindKey)) or nil,
+        selected = Menu.CurrentItem == row.itemIndex,
+        hover = Menu.DisplayMenuHoverItem == row.itemIndex,
+        enabled = item.value == true,
+        visible = row.visible == true,
+        rowRect = SDM_CopyRect(row.rowRect),
+        toggleRect = SDM_CopyRect(row.toggleRect),
+        sliderRect = SDM_CopyRect(row.sliderRect),
+        selectorRect = SDM_CopyRect(row.selectorRect),
+        valueRect = SDM_CopyRect(row.valueRect),
+        buttonRect = SDM_CopyRect(row.buttonRect),
+        buttonLabel = row.buttonLabel
+    }
+
+    if item.type == "toggle" and item.hasSlider then
+        local minValue = item.sliderMin or 0.0
+        local maxValue = item.sliderMax or 100.0
+        local currentValue = item.sliderValue or minValue
+        payload.sliderPercent = maxValue > minValue and SDM_Clamp((currentValue - minValue) / (maxValue - minValue), 0, 1) or 0
+        payload.valueText = SDM_FormatValue(currentValue)
+    elseif item.type == "slider" then
+        local minValue = item.min or 0.0
+        local maxValue = item.max or 100.0
+        local currentValue = item.value or minValue
+        payload.sliderPercent = maxValue > minValue and SDM_Clamp((currentValue - minValue) / (maxValue - minValue), 0, 1) or 0
+        payload.valueText = SDM_FormatValue(currentValue)
+    elseif item.type == "selector" or item.type == "toggle_selector" then
+        payload.displayValue = ((item.options or {})[item.selected or 1]) or tostring(item.selected or 1)
+    end
+
+    return payload
+end
+
+function Menu.BuildDuiDisplayMenuPayload(openedCategory, currentTab, map, panelX, panelY, panelW, panelH, scale)
+    local screenW, screenH = MenuGetScreenSize()
+    local layout = Menu.DisplayMenuLayout
+    local accent = Menu.Colors and Menu.Colors.SelectedBg or { r = 0, g = 221, b = 255 }
+    local padding = SDM_Scale(layout.padding, scale)
+    local sidebarW = layout.sidebarWidth * scale
+    local footerH = SDM_Scale(layout.footerHeight, scale)
+    local headerH = SDM_Scale(layout.headerHeight, scale)
+    local mainX = panelX + sidebarW
+    local mainW = panelW - sidebarW
+    local keyLabel = SDM_GetMenuToggleLabel()
+    local footerInfo = string.format("%d options  |  RMB close", map.totalItems or 0)
+
+    local selectedDisplayIndex = 1
+    for _, row in ipairs(map.itemRows or {}) do
+        if row.itemIndex == Menu.CurrentItem then
+            selectedDisplayIndex = row.displayOrder or selectedDisplayIndex
+            break
+        end
+    end
+
+    local categoryButtons = {}
+    for _, button in ipairs(map.categoryButtons or {}) do
+        categoryButtons[#categoryButtons + 1] = {
+            categoryIndex = button.categoryIndex,
+            label = button.category and button.category.name or "",
+            mono = SDM_GetCategoryMonogram(button.category and button.category.name or ""),
+            active = Menu.OpenedCategory == button.categoryIndex,
+            hover = Menu.DisplayMenuHoverCategory == button.categoryIndex,
+            rect = SDM_CopyRect(button)
+        }
+    end
+
+    local tabButtons = {}
+    for _, button in ipairs(map.tabButtons or {}) do
+        tabButtons[#tabButtons + 1] = {
+            tabIndex = button.tabIndex,
+            label = button.tab and button.tab.name or "",
+            active = button.tabIndex == Menu.CurrentTab,
+            hover = Menu.DisplayMenuHoverTab == button.tabIndex,
+            rect = SDM_CopyRect(button)
+        }
+    end
+
+    local sections = {}
+    for _, section in ipairs(map.sections or {}) do
+        local rows = {}
+        for _, row in ipairs(section.rows or {}) do
+            local serialized = SDM_SerializeRow(row)
+            if serialized then
+                rows[#rows + 1] = serialized
+            end
+        end
+
+        sections[#sections + 1] = {
+            title = section.title or "Options",
+            count = #(section.rows or {}),
+            rect = SDM_CopyRect(section),
+            visible = section.visible == true,
+            rows = rows
+        }
+    end
+
+    local summary = nil
+    if map.summaryRect then
+        summary = {
+            rect = SDM_CopyRect(map.summaryRect),
+            info = {
+                { label = "Category", value = tostring(openedCategory and openedCategory.name or "-") },
+                { label = "Tab", value = tostring(currentTab and currentTab.name or "-") },
+                { label = "Options", value = tostring(map.totalItems or 0) },
+                { label = "Theme", value = tostring(Menu.CurrentTheme or "Blue") },
+                { label = "Menu Key", value = keyLabel }
+            },
+            help = {
+                "LMB interact with rows and controls",
+                "RMB close current display menu",
+                "Arrow keys still work over content"
+            }
+        }
+    end
+
+    return {
+        action = "arcane:duiState",
+        visible = Menu.Visible and Menu.DisplayMenu,
+        screen = { w = screenW, h = screenH },
+        accentColor = {
+            r = accent.r or 0,
+            g = accent.g or 221,
+            b = accent.b or 255
+        },
+        brand = {
+            title = "arcane",
+            subtitle = "susano display overlay"
+        },
+        sidebarBadge = {
+            title = "Client-side executor",
+            subtitle = "Overlay mode active",
+            pill = "MENU KEY " .. keyLabel
+        },
+        header = {
+            title = tostring(openedCategory and openedCategory.name or "Arcane"),
+            subtitle = "Focused tab: " .. tostring(currentTab and currentTab.name or "Tab"),
+            themeText = "THEME  " .. tostring(Menu.CurrentTheme or "Blue"),
+            keyText = "MENU KEY  " .. keyLabel
+        },
+        hero = {
+            title = tostring(currentTab and currentTab.name or "Options"),
+            subtitle = string.format("%d live option%s", map.totalItems or 0, (map.totalItems or 0) == 1 and "" or "s")
+        },
+        footer = {
+            left = "discord.gg/arcaneservices",
+            center = footerInfo,
+            right = string.format("%d of %d", math.max(1, selectedDisplayIndex), math.max(1, map.totalItems or 1))
+        },
+        layout = {
+            panel = SDM_CopyRect({ x = panelX, y = panelY, w = panelW, h = panelH }),
+            contentArea = SDM_CopyRect(map.contentArea),
+            heroRect = SDM_CopyRect(map.heroRect),
+            searchRect = SDM_CopyRect(map.searchRect),
+            scrollbarTrack = SDM_CopyRect(map.scrollbarTrack),
+            scrollbarThumb = SDM_CopyRect(map.scrollbarThumb),
+            sidebarWidth = math.floor(sidebarW + 0.5),
+            mainX = math.floor(mainX + 0.5),
+            mainWidth = math.floor(mainW + 0.5),
+            padding = math.floor(padding + 0.5),
+            footerHeight = math.floor(footerH + 0.5),
+            headerHeight = math.floor(headerH + 0.5),
+            radius = math.floor(SDM_Scale(layout.sectionRadius, scale) + 0.5)
+        },
+        map = {
+            totalItems = map.totalItems or 0,
+            categoryButtons = categoryButtons,
+            tabButtons = tabButtons,
+            sections = sections,
+            summary = summary
+        }
+    }
+end
+
+function Menu.SyncDuiDisplayMenu(force, openedCategory, currentTab, map, panelX, panelY, panelW, panelH, scale)
+    if not Menu.ShouldUseDuiDisplayMenu() then
+        return
+    end
+
+    local screenW, screenH = MenuGetScreenSize()
+    if not EnsureDuiDisplayMenuReady(screenW, screenH) then
+        return
+    end
+
+    local visible = Menu.Visible and Menu.DisplayMenu
+    if not visible then
+        if Menu.DuiDisplayMenuVisible then
+            Menu.SyncDuiDisplayMenuMessage({
+                action = "arcane:duiState",
+                visible = false
+            })
+            Menu.DuiDisplayMenuVisible = false
+        end
+        return
+    end
+
+    if not openedCategory or not currentTab or not map then
+        return
+    end
+
+    local now = GetGameTimer and GetGameTimer() or 0
+    if force or Menu.DuiDisplayMenuDirty or not Menu.DuiDisplayMenuVisible or (now - (Menu.DuiDisplayMenuLastSyncAt or 0)) >= (Menu.DuiDisplayMenuSyncInterval or 75) then
+        local payload = Menu.BuildDuiDisplayMenuPayload(openedCategory, currentTab, map, panelX, panelY, panelW, panelH, scale)
+        Menu.SyncDuiDisplayMenuMessage(payload)
+        Menu.DuiDisplayMenuVisible = true
+        Menu.DuiDisplayMenuDirty = false
+        Menu.DuiDisplayMenuLastSyncAt = now
+    end
+end
+
 Menu.DrawDisplayMenu = function()
     if not Menu.Categories then return end
-    if not (Susano and (Susano.DrawRectFilled or Susano.DrawFilledRect)) then return end
-    SetInteractiveOverlayState(true)
-
     local panelX, panelY, panelW, panelH, scale = SDM_GetRect()
     local opened = SDM_EnsureOpenedCategory()
     local currentTab = opened and opened.tabs and opened.tabs[Menu.CurrentTab] or nil
@@ -4282,14 +4824,26 @@ Menu.DrawDisplayMenu = function()
         return
     end
 
+    local map = SDM_BuildMap(opened, currentTab, panelX, panelY, panelW, panelH, scale)
+    Menu.DisplayMenuCurrentMap = map
+
+    if Menu.ShouldUseDuiDisplayMenu() then
+        Menu.SyncDuiDisplayMenu(false, opened, currentTab, map, panelX, panelY, panelW, panelH, scale)
+        if EnsureDuiDisplayMenuReady(MenuGetScreenSize()) and Menu.DuiDisplayMenuTxdName and Menu.DuiDisplayMenuTxnName then
+            DrawSprite(Menu.DuiDisplayMenuTxdName, Menu.DuiDisplayMenuTxnName, 0.5, 0.5, 1.0, 1.0, 0.0, 255, 255, 255, 255)
+            return
+        end
+    end
+
+    if not (Susano and (Susano.DrawRectFilled or Susano.DrawFilledRect)) then return end
+    SetInteractiveOverlayState(true)
+
     local layout = Menu.DisplayMenuLayout
     local accentR, accentG, accentB = SDM_GetAccent()
     local sidebarW = layout.sidebarWidth * scale
     local radius = SDM_Scale(layout.sectionRadius, scale)
     local footerH = SDM_Scale(layout.footerHeight, scale)
     local screenW, screenH = MenuGetScreenSize()
-    local map = SDM_BuildMap(opened, currentTab, panelX, panelY, panelW, panelH, scale)
-    Menu.DisplayMenuCurrentMap = map
     local padding = SDM_Scale(layout.padding, scale)
     local mainX = panelX + sidebarW
     local mainW = panelW - sidebarW
@@ -4516,6 +5070,8 @@ Menu.HandleDisplayMenuInput = function()
         Menu.DisplayMenuCurrentMap = nil
         Menu.DisplayMenuLeftWasDown = false
         Menu.DisplayMenuRightWasDown = false
+        Menu.DuiDisplayMenuMouseLeftDown = false
+        Menu.DuiDisplayMenuMouseRightDown = false
         return
     end
 
@@ -4524,6 +5080,10 @@ Menu.HandleDisplayMenuInput = function()
     local mouseX, mouseY, leftDown, leftPressed, rightDown, rightPressed = GetOverlayMouseState()
     if not mouseX then
         return
+    end
+
+    if Menu.UpdateDuiDisplayMenuMouse then
+        Menu.UpdateDuiDisplayMenuMouse(mouseX, mouseY, leftDown == true, rightDown == true)
     end
 
     local leftClicked = leftPressed or (leftDown and not Menu.DisplayMenuLeftWasDown)
@@ -4706,6 +5266,9 @@ function Menu.Render()
     SetInteractiveOverlayState(IsInteractiveOverlayActive())
     if Menu.SyncNuiDisplayMenu then
         Menu.SyncNuiDisplayMenu(false)
+    end
+    if Menu.SyncDuiDisplayMenu then
+        Menu.SyncDuiDisplayMenu(false)
     end
 
     Susano.BeginFrame()
@@ -5680,8 +6243,10 @@ end
 
 function Menu.MarkNuiDisplayMenuDirty(force)
     Menu.NuiDisplayMenuDirty = true
+    Menu.DuiDisplayMenuDirty = true
     if force then
         Menu.NuiDisplayMenuLastSyncAt = 0
+        Menu.DuiDisplayMenuLastSyncAt = 0
     end
 end
 
@@ -6310,6 +6875,9 @@ function Menu.HandleInput()
             SetInteractiveOverlayState(IsInteractiveOverlayActive())
             if Menu.SyncNuiDisplayMenu then
                 Menu.SyncNuiDisplayMenu(true)
+            end
+            if Menu.SyncDuiDisplayMenu then
+                Menu.SyncDuiDisplayMenu(true)
             end
 
             if wasVisible and not Menu.Visible and not Menu.ShowKeybinds and not Menu.ShowSpectatorList then
