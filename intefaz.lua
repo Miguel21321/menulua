@@ -3535,30 +3535,30 @@ end
 
 
 Menu.DisplayMenuLayout = {
-    width = 980,
-    height = 540,
-    minHeight = 430,
-    maxHeightRatio = 0.88,
-    sidebarWidth = 214,
-    brandHeight = 54,
-    searchHeight = 34,
-    headerHeight = 52,
-    footerHeight = 28,
-    padding = 14,
-    categoryHeight = 32,
-    categoryGap = 3,
+    width = 1120,
+    height = 650,
+    minHeight = 500,
+    maxHeightRatio = 0.90,
+    sidebarWidth = 246,
+    brandHeight = 74,
+    searchHeight = 54,
+    headerHeight = 88,
+    footerHeight = 34,
+    padding = 18,
+    categoryHeight = 42,
+    categoryGap = 8,
     tabHeight = 34,
-    tabGap = 8,
-    sectionGap = 12,
-    sectionHeaderHeight = 22,
-    sectionPaddingX = 16,
-    sectionPaddingY = 14,
-    sectionRadius = 16,
-    rowGap = 8,
-    itemHeight = 30,
+    tabGap = 10,
+    sectionGap = 16,
+    sectionHeaderHeight = 26,
+    sectionPaddingX = 18,
+    sectionPaddingY = 16,
+    sectionRadius = 18,
+    rowGap = 10,
+    itemHeight = 38,
     sliderHeight = 6,
-    controlWidth = 176,
-    scrollStep = 36
+    controlWidth = 196,
+    scrollStep = 44
 }
 
 local function SDM_Scale(value, scale)
@@ -3721,8 +3721,16 @@ local SDM_ItemHeight
 local SDM_BuildSections
 
 local function SDM_GetSectionColumnCount(sections, areaW, scale)
-    if not sections or #sections <= 2 then
+    if not sections or #sections == 0 then
         return 1
+    end
+
+    if #sections == 1 then
+        return areaW >= SDM_Scale(820, scale) and 2 or 1
+    end
+
+    if #sections == 2 then
+        return areaW >= SDM_Scale(780, scale) and 2 or 1
     end
 
     return areaW >= SDM_Scale(760, scale) and 2 or 1
@@ -3748,8 +3756,9 @@ end
 local function SDM_MeasureTabContentHeight(tab, areaW, scale)
     local layout = Menu.DisplayMenuLayout
     local sections = SDM_BuildSections(tab)
+    local heroReserve = SDM_Scale(72, scale)
     if #sections == 0 then
-        return SDM_Scale(180, scale)
+        return heroReserve + SDM_Scale(180, scale)
     end
 
     local columnCount = SDM_GetSectionColumnCount(sections, areaW, scale)
@@ -3786,7 +3795,7 @@ local function SDM_MeasureTabContentHeight(tab, areaW, scale)
         contentHeight = math.max(contentHeight, math.max(0, columnHeights[col] - sectionGap))
     end
 
-    return math.max(SDM_Scale(190, scale), contentHeight)
+    return heroReserve + math.max(SDM_Scale(190, scale), contentHeight)
 end
 
 local function SDM_GetRect()
@@ -3949,9 +3958,30 @@ local function SDM_DrawCheckbox(x, y, size, checked, accentR, accentG, accentB)
     end
 end
 
+local function SDM_DrawToggleSwitch(x, y, w, h, checked, accentR, accentG, accentB)
+    local radius = math.max(5, h * 0.5)
+    local knobSize = h - SDM_Scale(4, 1.0)
+    local knobX = checked and (x + w - knobSize - SDM_Scale(2, 1.0)) or (x + SDM_Scale(2, 1.0))
+    local knobY = y + math.floor((h - knobSize) / 2)
+
+    SDM_DrawRect(x, y, w, h, checked and accentR or 43, checked and accentG or 46, checked and accentB or 58, checked and 0.34 or 255, radius)
+    SDM_DrawOutline(x, y, w, h, checked and accentR or 74, checked and accentG or 78, checked and accentB or 94, checked and 120 or 190, 1)
+    SDM_DrawRect(knobX, knobY, knobSize, knobSize, 245, 246, 250, 255, knobSize * 0.5)
+end
+
+local function SDM_DrawPill(x, y, text, size, bgR, bgG, bgB, bgA, textR, textG, textB)
+    local label = tostring(text or "")
+    local padX = math.max(10, size - 2)
+    local h = size + 10
+    local w = SDM_TextWidth(label, size) + (padX * 2)
+    SDM_DrawRect(x, y, w, h, bgR, bgG, bgB, bgA or 255, math.floor(h * 0.5))
+    SDM_DrawText(x + padX, y + math.floor((h - size) / 2) - 1, label, size, textR or 245, textG or 245, textB or 248, 1.0)
+    return w, h
+end
+
 SDM_ItemHeight = function(item, scale)
     if item and (item.type == "slider" or (item.type == "toggle" and item.hasSlider)) then
-        return SDM_Scale(44, scale)
+        return SDM_Scale(50, scale)
     end
     return SDM_Scale(Menu.DisplayMenuLayout.itemHeight, scale)
 end
@@ -4035,9 +4065,15 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
     local areaY = panelY + (layout.headerHeight * scale) + padding
     local areaW = panelW - sidebarW - (padding * 2)
     local areaH = panelH - (layout.headerHeight * scale) - footerH - (padding * 2)
+    local heroH = SDM_Scale(58, scale)
+    local heroGap = SDM_Scale(14, scale)
+    local sectionAreaY = areaY + heroH + heroGap
+    local sectionAreaH = math.max(SDM_Scale(160, scale), areaH - heroH - heroGap)
     local map = {
         panel = { x = panelX, y = panelY, w = panelW, h = panelH },
         contentArea = { x = areaX, y = areaY, w = areaW, h = areaH },
+        heroRect = { x = areaX, y = areaY, w = areaW, h = heroH },
+        sectionArea = { x = areaX, y = sectionAreaY, w = areaW, h = sectionAreaH },
         searchRect = {
             x = panelX + padding,
             y = panelY + SDM_Scale(layout.brandHeight, scale) + SDM_Scale(10, scale),
@@ -4050,7 +4086,10 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
         itemRows = {},
         totalItems = 0,
         scrollOffset = 0,
-        scrollRange = 0
+        scrollRange = 0,
+        columnCount = 1,
+        sectionWidth = areaW,
+        sectionGap = 0
     }
 
     for displayIndex = 1, (#Menu.Categories - 1) do
@@ -4093,6 +4132,9 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
     local columnCount = SDM_GetSectionColumnCount(sections, areaW, scale)
     local sectionGap = SDM_Scale(layout.sectionGap, scale)
     local sectionWidth = math.floor((areaW - (sectionGap * math.max(0, columnCount - 1))) / math.max(1, columnCount))
+    map.columnCount = columnCount
+    map.sectionWidth = sectionWidth
+    map.sectionGap = sectionGap
     local columnHeights = {}
     for col = 1, columnCount do columnHeights[col] = 0 end
 
@@ -4123,23 +4165,26 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
         contentHeight = math.max(contentHeight, math.max(0, columnHeights[col] - sectionGap))
     end
 
-    local scrollRange = math.max(0, contentHeight - areaH)
+    local scrollRange = math.max(0, contentHeight - sectionAreaH)
     local scrollOffset = SDM_Clamp(Menu.DisplayMenuItemScrollOffset or 0, 0, scrollRange)
     Menu.DisplayMenuItemScrollOffset = scrollOffset
     map.scrollOffset = scrollOffset
     map.scrollRange = scrollRange
-    map.visualContentHeight = math.min(areaH, math.max(contentHeight + SDM_Scale(8, scale), SDM_Scale(210, scale)))
+    map.sectionVisualHeight = math.min(sectionAreaH, math.max(contentHeight + SDM_Scale(8, scale), SDM_Scale(190, scale)))
+    map.visualContentHeight = math.min(areaH, heroH + heroGap + map.sectionVisualHeight)
 
     local sectionPadX = SDM_Scale(layout.sectionPaddingX, scale)
     local sectionPadY = SDM_Scale(layout.sectionPaddingY, scale)
     local sectionHeaderH = SDM_Scale(layout.sectionHeaderHeight, scale)
     local checkboxSize = SDM_Scale(18, scale)
+    local toggleW = SDM_Scale(40, scale)
+    local toggleH = SDM_Scale(22, scale)
     local sliderHeight = math.max(4, SDM_Scale(layout.sliderHeight, scale))
     local controlWidth = SDM_Scale(layout.controlWidth, scale)
 
     for _, placement in ipairs(placements) do
         local sectionX = areaX + ((placement.col - 1) * (sectionWidth + sectionGap))
-        local sectionY = areaY + placement.top - scrollOffset
+        local sectionY = sectionAreaY + placement.top - scrollOffset
         local sectionEntry = {
             title = placement.section.title or "Options",
             x = sectionX,
@@ -4147,7 +4192,7 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
             w = placement.width,
             h = placement.height,
             rows = {},
-            visible = not (sectionY + placement.height < areaY or sectionY > (areaY + areaH))
+            visible = not (sectionY + placement.height < sectionAreaY or sectionY > (sectionAreaY + sectionAreaH))
         }
 
         local rowY = sectionY + sectionPadY + sectionHeaderH
@@ -4159,18 +4204,18 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
                 itemIndex = itemIndices[item] or 1,
                 displayOrder = map.totalItems + 1,
                 rowRect = rowRect,
-                visible = not (rowRect.y + rowRect.h < areaY or rowRect.y > (areaY + areaH))
+                visible = not (rowRect.y + rowRect.h < sectionAreaY or rowRect.y > (sectionAreaY + sectionAreaH))
             }
 
             local rightX = rowRect.x + rowRect.w
             local midY = rowRect.y + math.floor(rowRect.h / 2)
 
             if item.type == "toggle" then
-                rowEntry.toggleRect = { x = rightX - checkboxSize, y = midY - math.floor(checkboxSize / 2), w = checkboxSize, h = checkboxSize }
+                rowEntry.toggleRect = { x = rightX - toggleW, y = midY - math.floor(toggleH / 2), w = toggleW, h = toggleH }
                 if item.hasSlider then
                     local valueW = SDM_TextWidth(SDM_FormatValue(item.sliderValue or item.sliderMin or 0), 12)
                     local sliderW = math.min(controlWidth, rowRect.w - SDM_Scale(170, scale))
-                    local sliderX = rightX - checkboxSize - SDM_Scale(14, scale) - sliderW - valueW - SDM_Scale(10, scale)
+                    local sliderX = rightX - toggleW - SDM_Scale(14, scale) - sliderW - valueW - SDM_Scale(10, scale)
                     rowEntry.sliderRect = { x = sliderX, y = rowRect.y + rowRect.h - sliderHeight - SDM_Scale(8, scale), w = sliderW, h = sliderHeight }
                     rowEntry.valueRect = { x = sliderX + sliderW + SDM_Scale(10, scale), y = rowEntry.sliderRect.y - SDM_Scale(9, scale), w = valueW, h = SDM_Scale(20, scale) }
                 end
@@ -4185,13 +4230,15 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
                 local selectorW = math.min(SDM_Scale(200, scale), math.max(SDM_Scale(112, scale), SDM_TextWidth("  < " .. tostring(optionText) .. " >  ", 12) + SDM_Scale(14, scale)))
                 local selectorRight = rightX
                 if item.type == "toggle_selector" then
-                    rowEntry.toggleRect = { x = rightX - checkboxSize, y = midY - math.floor(checkboxSize / 2), w = checkboxSize, h = checkboxSize }
+                    rowEntry.toggleRect = { x = rightX - toggleW, y = midY - math.floor(toggleH / 2), w = toggleW, h = toggleH }
                     selectorRight = rowEntry.toggleRect.x - SDM_Scale(12, scale)
                 end
                 rowEntry.selectorRect = { x = selectorRight - selectorW, y = midY - math.floor(SDM_Scale(26, scale) / 2), w = selectorW, h = SDM_Scale(26, scale) }
             elseif item.type == "action" then
-                local buttonW = SDM_TextWidth("Run", 12) + SDM_Scale(24, scale)
-                rowEntry.buttonRect = { x = rightX - buttonW, y = midY - math.floor(SDM_Scale(24, scale) / 2), w = buttonW, h = SDM_Scale(24, scale) }
+                local buttonLabel = "Execute"
+                local buttonW = SDM_TextWidth(buttonLabel, 12) + SDM_Scale(28, scale)
+                rowEntry.buttonLabel = buttonLabel
+                rowEntry.buttonRect = { x = rightX - buttonW, y = midY - math.floor(SDM_Scale(28, scale) / 2), w = buttonW, h = SDM_Scale(28, scale) }
             end
 
             sectionEntry.rows[#sectionEntry.rows + 1] = rowEntry
@@ -4205,10 +4252,19 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
 
     if scrollRange > 0 then
         local trackW = SDM_Scale(4, scale)
-        local thumbH = math.max(SDM_Scale(42, scale), areaH * (areaH / math.max(areaH, contentHeight)))
+        local thumbH = math.max(SDM_Scale(42, scale), sectionAreaH * (sectionAreaH / math.max(sectionAreaH, contentHeight)))
         local percent = scrollRange > 0 and (scrollOffset / scrollRange) or 0
-        map.scrollbarTrack = { x = areaX + areaW - trackW, y = areaY, w = trackW, h = areaH }
-        map.scrollbarThumb = { x = map.scrollbarTrack.x, y = areaY + ((areaH - thumbH) * percent), w = trackW, h = thumbH }
+        map.scrollbarTrack = { x = areaX + areaW - trackW, y = sectionAreaY, w = trackW, h = sectionAreaH }
+        map.scrollbarThumb = { x = map.scrollbarTrack.x, y = sectionAreaY + ((sectionAreaH - thumbH) * percent), w = trackW, h = thumbH }
+    end
+
+    if columnCount == 2 and #sections == 1 then
+        map.summaryRect = {
+            x = areaX + sectionWidth + sectionGap,
+            y = sectionAreaY,
+            w = sectionWidth,
+            h = map.sectionVisualHeight
+        }
     end
 
     return map
@@ -4234,74 +4290,95 @@ Menu.DrawDisplayMenu = function()
     local screenW, screenH = MenuGetScreenSize()
     local map = SDM_BuildMap(opened, currentTab, panelX, panelY, panelW, panelH, scale)
     Menu.DisplayMenuCurrentMap = map
+    local padding = SDM_Scale(layout.padding, scale)
+    local mainX = panelX + sidebarW
+    local mainW = panelW - sidebarW
 
-    SDM_DrawRect(0, 0, screenW, screenH, 0, 0, 0, 96)
-    SDM_DrawRect(panelX + SDM_Scale(8, scale), panelY + SDM_Scale(12, scale), panelW, panelH, 0, 0, 0, 72, radius + SDM_Scale(5, scale))
-    SDM_DrawRect(panelX, panelY, panelW, panelH, 19, 20, 26, 252, radius)
-    SDM_DrawOutline(panelX, panelY, panelW, panelH, 48, 50, 62, 210, 1)
-    SDM_DrawRect(panelX, panelY, sidebarW, panelH, 23, 24, 31, 255, radius)
-    SDM_DrawRect(panelX + sidebarW - SDM_Scale(1, scale), panelY + SDM_Scale(10, scale), SDM_Scale(1, scale), panelH - SDM_Scale(20, scale), 42, 43, 54, 210)
-    SDM_DrawRect(panelX + sidebarW, panelY, panelW - sidebarW, SDM_Scale(layout.headerHeight, scale), 21, 22, 29, 255, radius)
-    SDM_DrawRect(panelX, panelY + panelH - footerH, panelW, footerH, 16, 17, 23, 255, radius)
-    SDM_DrawRect(panelX + sidebarW, panelY + SDM_Scale(layout.headerHeight, scale) - SDM_Scale(1, scale), panelW - sidebarW, SDM_Scale(1, scale), 40, 42, 54, 220)
+    SDM_DrawRect(0, 0, screenW, screenH, 4, 7, 13, 122)
+    SDM_DrawRect(panelX + SDM_Scale(12, scale), panelY + SDM_Scale(18, scale), panelW, panelH, 0, 0, 0, 82, radius + SDM_Scale(10, scale))
+    SDM_DrawRect(panelX, panelY, panelW, panelH, 12, 14, 20, 252, radius)
+    SDM_DrawOutline(panelX, panelY, panelW, panelH, 61, 67, 82, 175, 1)
+    SDM_DrawRect(panelX, panelY, sidebarW, panelH, 18, 21, 30, 255, radius)
+    SDM_DrawRect(mainX, panelY, mainW, panelH, 11, 13, 19, 242, radius)
+    SDM_DrawGradientBar(mainX + padding, panelY + SDM_Scale(18, scale), mainW - (padding * 2), SDM_Scale(72, scale), accentR, accentG, accentB, 52, SDM_Scale(16, scale))
+    SDM_DrawRect(mainX, panelY, mainW, SDM_Scale(layout.headerHeight, scale), 15, 18, 26, 210, radius)
+    SDM_DrawRect(panelX, panelY + panelH - footerH, panelW, footerH, 10, 12, 17, 255, radius)
+    SDM_DrawRect(panelX + sidebarW - SDM_Scale(1, scale), panelY + SDM_Scale(18, scale), SDM_Scale(1, scale), panelH - SDM_Scale(36, scale), 38, 42, 54, 220)
 
-    local badgeSize = SDM_Scale(18, scale)
+    local badgeSize = SDM_Scale(22, scale)
     local badgeX = panelX + SDM_Scale(layout.padding, scale)
-    local badgeY = panelY + SDM_Scale(18, scale)
+    local badgeY = panelY + SDM_Scale(20, scale)
     SDM_DrawRect(badgeX, badgeY, badgeSize, badgeSize, accentR, accentG, accentB, 255, math.max(4, badgeSize * 0.34))
-    SDM_DrawRect(badgeX + SDM_Scale(4, scale), badgeY + SDM_Scale(4, scale), badgeSize - SDM_Scale(8, scale), badgeSize - SDM_Scale(8, scale), 18, 19, 24, 255, math.max(3, badgeSize * 0.24))
-    SDM_DrawText(badgeX + badgeSize + SDM_Scale(10, scale), badgeY - SDM_Scale(2, scale), "arcane", 24, 245, 245, 248, 1.0)
-    SDM_DrawText(badgeX + badgeSize + SDM_Scale(10, scale), badgeY + SDM_Scale(20, scale), "display menu", 11, 135, 140, 154, 1.0)
+    SDM_DrawRect(badgeX + SDM_Scale(5, scale), badgeY + SDM_Scale(5, scale), badgeSize - SDM_Scale(10, scale), badgeSize - SDM_Scale(10, scale), 12, 14, 20, 255, math.max(3, badgeSize * 0.24))
+    SDM_DrawText(badgeX + badgeSize + SDM_Scale(12, scale), badgeY - SDM_Scale(2, scale), "arcane", 27, 245, 245, 248, 1.0)
+    SDM_DrawText(badgeX + badgeSize + SDM_Scale(12, scale), badgeY + SDM_Scale(23, scale), "susano display overlay", 11, 122, 129, 146, 1.0)
 
-    SDM_DrawRect(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 30, 31, 38, 255, SDM_Scale(9, scale))
-    SDM_DrawOutline(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 49, 51, 64, 210, 1)
-    SDM_DrawText(map.searchRect.x + SDM_Scale(12, scale), map.searchRect.y + SDM_Scale(11, scale), "Search", 12, 110, 114, 127, 1.0)
+    SDM_DrawRect(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 24, 27, 36, 255, SDM_Scale(12, scale))
+    SDM_DrawOutline(map.searchRect.x, map.searchRect.y, map.searchRect.w, map.searchRect.h, 45, 50, 66, 215, 1)
+    SDM_DrawText(map.searchRect.x + SDM_Scale(12, scale), map.searchRect.y + SDM_Scale(10, scale), "Client-side executor", 11, accentR, accentG, accentB, 1.0)
+    SDM_DrawText(map.searchRect.x + SDM_Scale(12, scale), map.searchRect.y + SDM_Scale(26, scale), "Overlay mode active", 12, 226, 228, 235, 1.0)
+    local buildText = "MENU KEY " .. SDM_GetMenuToggleLabel()
+    local buildW = SDM_TextWidth(buildText, 10) + 16
+    SDM_DrawPill(map.searchRect.x + map.searchRect.w - buildW - SDM_Scale(18, scale), map.searchRect.y + SDM_Scale(12, scale), buildText, 10, 35, 39, 50, 255, 173, 179, 193)
 
     for _, button in ipairs(map.categoryButtons) do
         local isSelected = Menu.OpenedCategory == button.categoryIndex
         local isHover = Menu.DisplayMenuHoverCategory == button.categoryIndex
-        if isSelected then
-            SDM_DrawRect(button.x, button.y, button.w, button.h, 31, 32, 40, 255, SDM_Scale(9, scale))
-            SDM_DrawGradientBar(button.x, button.y, SDM_Scale(3, scale), button.h, accentR, accentG, accentB, 255, SDM_Scale(2, scale))
-        elseif isHover then
-            SDM_DrawRect(button.x, button.y, button.w, button.h, 255, 255, 255, 10, SDM_Scale(9, scale))
-        end
-
-        local iconSize = SDM_Scale(24, scale)
+        local iconSize = SDM_Scale(26, scale)
         local iconX = button.x + SDM_Scale(12, scale)
         local iconY = button.y + math.floor((button.h - iconSize) / 2)
+        if isSelected then
+            SDM_DrawRect(button.x, button.y, button.w, button.h, 33, 36, 47, 255, SDM_Scale(14, scale))
+            SDM_DrawOutline(button.x, button.y, button.w, button.h, accentR, accentG, accentB, 85, 1)
+            SDM_DrawRect(button.x + SDM_Scale(4, scale), button.y + SDM_Scale(6, scale), SDM_Scale(3, scale), button.h - SDM_Scale(12, scale), accentR, accentG, accentB, 255, SDM_Scale(2, scale))
+        elseif isHover then
+            SDM_DrawRect(button.x, button.y, button.w, button.h, 255, 255, 255, 12, SDM_Scale(14, scale))
+        end
+
         SDM_DrawCategoryIcon(button.category, iconX, iconY, iconSize, isSelected, accentR, accentG, accentB)
-        SDM_DrawText(iconX + iconSize + SDM_Scale(12, scale), button.y + SDM_Scale(13, scale), button.category.name or "", 14, isSelected and 245 or 176, isSelected and 245 or 180, isSelected and 248 or 191, 1.0)
+        SDM_DrawText(iconX + iconSize + SDM_Scale(12, scale), button.y + SDM_Scale(8, scale), button.category.name or "", 15, isSelected and 245 or 194, isSelected and 245 or 198, isSelected and 248 or 210, 1.0)
+        SDM_DrawText(iconX + iconSize + SDM_Scale(12, scale), button.y + SDM_Scale(23, scale), isSelected and "module active" or "module", 10, 118, 124, 141, 1.0)
     end
 
-    local headerLabel = string.format("%s / %s", tostring(opened.name or "Category"), tostring(currentTab.name or "Tab"))
-    local headerInfo = string.format("%s  |  Menu Key", SDM_GetMenuToggleLabel())
-    local headerInfoW = SDM_TextWidth(headerInfo, 11)
-    SDM_DrawText(panelX + sidebarW + SDM_Scale(layout.padding, scale), panelY + SDM_Scale(15, scale), headerLabel, 16, 242, 242, 246, 1.0)
-    SDM_DrawText(panelX + panelW - headerInfoW - SDM_Scale(layout.padding, scale), panelY + SDM_Scale(18, scale), headerInfo, 11, 134, 138, 150, 1.0)
-    SDM_DrawRect(map.contentArea.x, map.contentArea.y, map.contentArea.w, map.visualContentHeight or map.contentArea.h, 17, 18, 24, 110, SDM_Scale(12, scale))
+    SDM_DrawText(mainX + padding, panelY + SDM_Scale(18, scale), tostring(opened.name or "Category"), 28, 244, 245, 248, 1.0)
+    SDM_DrawText(mainX + padding, panelY + SDM_Scale(48, scale), "Focused tab: " .. tostring(currentTab.name or "Tab"), 12, 146, 153, 169, 1.0)
+    local pillY = panelY + SDM_Scale(20, scale)
+    local rightEdge = panelX + panelW - padding
+    local keyText = "MENU KEY  " .. SDM_GetMenuToggleLabel()
+    local keyW = SDM_TextWidth(keyText, 10) + 16
+    local themeText = "THEME  " .. tostring(Menu.CurrentTheme or "Blue")
+    local themeW = SDM_TextWidth(themeText, 10) + 16
+    SDM_DrawPill(rightEdge - keyW, pillY, keyText, 10, 26, 30, 40, 255, 223, 227, 236)
+    SDM_DrawPill(rightEdge - keyW - themeW - SDM_Scale(10, scale), pillY, themeText, 10, accentR, accentG, accentB, 72, 240, 244, 248)
+    SDM_DrawRect(map.contentArea.x, map.contentArea.y, map.contentArea.w, map.visualContentHeight or map.contentArea.h, 15, 18, 25, 112, SDM_Scale(18, scale))
+    SDM_DrawRect(map.contentArea.x, map.contentArea.y, map.contentArea.w, SDM_Scale(56, scale), 255, 255, 255, 4, SDM_Scale(18, scale))
+    SDM_DrawText(map.contentArea.x + SDM_Scale(16, scale), map.contentArea.y + SDM_Scale(12, scale), tostring(currentTab.name or "Options"), 18, 240, 242, 247, 1.0)
+    SDM_DrawText(map.contentArea.x + SDM_Scale(16, scale), map.contentArea.y + SDM_Scale(33, scale), string.format("%d live option%s", map.totalItems, map.totalItems == 1 and "" or "s"), 11, 132, 140, 158, 1.0)
 
     for _, tabButton in ipairs(map.tabButtons) do
         local isActive = tabButton.tabIndex == Menu.CurrentTab
         local isHover = Menu.DisplayMenuHoverTab == tabButton.tabIndex
         if isActive then
-            SDM_DrawRect(tabButton.x, tabButton.y + SDM_Scale(6, scale), tabButton.w, tabButton.h - SDM_Scale(6, scale), 28, 29, 37, 255, SDM_Scale(9, scale))
-            SDM_DrawGradientBar(tabButton.x, tabButton.y + tabButton.h - SDM_Scale(3, scale), tabButton.w, SDM_Scale(3, scale), accentR, accentG, accentB, 255, SDM_Scale(2, scale))
+            SDM_DrawRect(tabButton.x, tabButton.y + SDM_Scale(6, scale), tabButton.w, tabButton.h - SDM_Scale(6, scale), accentR, accentG, accentB, 52, SDM_Scale(12, scale))
+            SDM_DrawOutline(tabButton.x, tabButton.y + SDM_Scale(6, scale), tabButton.w, tabButton.h - SDM_Scale(6, scale), accentR, accentG, accentB, 90, 1)
         elseif isHover then
-            SDM_DrawRect(tabButton.x, tabButton.y + SDM_Scale(8, scale), tabButton.w, tabButton.h - SDM_Scale(8, scale), 255, 255, 255, 8, SDM_Scale(9, scale))
+            SDM_DrawRect(tabButton.x, tabButton.y + SDM_Scale(8, scale), tabButton.w, tabButton.h - SDM_Scale(8, scale), 255, 255, 255, 9, SDM_Scale(12, scale))
         end
 
         local label = tabButton.tab.name or ""
         local labelW = SDM_TextWidth(label, 13)
-        SDM_DrawText(tabButton.x + math.floor((tabButton.w - labelW) / 2), tabButton.y + SDM_Scale(11, scale), label, 13, isActive and accentR or 177, isActive and accentG or 181, isActive and accentB or 192, 1.0)
+        SDM_DrawText(tabButton.x + math.floor((tabButton.w - labelW) / 2), tabButton.y + SDM_Scale(11, scale), label, 13, isActive and 247 or 177, isActive and 248 or 181, isActive and 250 or 192, 1.0)
     end
 
     for _, section in ipairs(map.sections) do
         if section.visible then
-            SDM_DrawRect(section.x, section.y, section.w, section.h, 24, 25, 32, 255, radius)
-            SDM_DrawOutline(section.x, section.y, section.w, section.h, 40, 42, 52, 210, 1)
-            SDM_DrawGradientBar(section.x, section.y, SDM_Scale(3, scale), section.h, accentR, accentG, accentB, 255, SDM_Scale(2, scale))
-            SDM_DrawText(section.x + SDM_Scale(layout.sectionPaddingX, scale), section.y + SDM_Scale(layout.sectionPaddingY, scale), section.title, 12, 137, 141, 155, 1.0)
+            SDM_DrawRect(section.x, section.y, section.w, section.h, 20, 23, 31, 248, radius)
+            SDM_DrawOutline(section.x, section.y, section.w, section.h, 38, 43, 55, 220, 1)
+            SDM_DrawGradientBar(section.x + SDM_Scale(1, scale), section.y + SDM_Scale(1, scale), section.w - SDM_Scale(2, scale), SDM_Scale(3, scale), accentR, accentG, accentB, 255, SDM_Scale(2, scale))
+            SDM_DrawText(section.x + SDM_Scale(layout.sectionPaddingX, scale), section.y + SDM_Scale(layout.sectionPaddingY, scale), section.title, 13, 214, 219, 229, 1.0)
+            local countText = string.format("%d", #(section.rows or {}))
+            local countW = SDM_TextWidth(countText, 10) + SDM_Scale(16, scale)
+            SDM_DrawPill(section.x + section.w - countW - SDM_Scale(14, scale), section.y + SDM_Scale(11, scale), countText, 10, 34, 39, 50, 255, 152, 159, 176)
 
             for _, row in ipairs(section.rows) do
                 if row.visible then
@@ -4310,29 +4387,36 @@ Menu.DrawDisplayMenu = function()
                     local hover = Menu.DisplayMenuHoverItem == row.itemIndex
                     local selected = Menu.CurrentItem == row.itemIndex
                     if hover or selected then
-                        SDM_DrawRect(rect.x, rect.y, rect.w, rect.h, 255, 255, 255, hover and 7 or 5, SDM_Scale(8, scale))
+                        SDM_DrawRect(rect.x, rect.y, rect.w, rect.h, selected and accentR or 255, selected and accentG or 255, selected and accentB or 255, selected and 18 or 8, SDM_Scale(12, scale))
+                    else
+                        SDM_DrawRect(rect.x, rect.y, rect.w, rect.h, 255, 255, 255, 3, SDM_Scale(12, scale))
                     end
 
-                    local labelY = rect.y + SDM_Scale((item.type == "slider" or (item.type == "toggle" and item.hasSlider)) and 4 or 8, scale)
-                    SDM_DrawText(rect.x, labelY, item.name or "", 13, 229, 229, 233, 1.0)
+                    if selected then
+                        SDM_DrawRect(rect.x, rect.y + SDM_Scale(6, scale), SDM_Scale(3, scale), rect.h - SDM_Scale(12, scale), accentR, accentG, accentB, 255, SDM_Scale(2, scale))
+                    end
+
+                    local labelY = rect.y + SDM_Scale((item.type == "slider" or (item.type == "toggle" and item.hasSlider)) and 5 or 10, scale)
+                    SDM_DrawText(rect.x + SDM_Scale(12, scale), labelY, item.name or "", 13, 233, 234, 238, 1.0)
                     if item.bindKeyName then
-                        SDM_DrawText(rect.x + SDM_TextWidth(item.name or "", 13) + SDM_Scale(8, scale), labelY + SDM_Scale(1, scale), "[" .. tostring(item.bindKeyName) .. "]", 10, 118, 122, 135, 1.0)
+                        local bindText = "[" .. tostring(item.bindKeyName) .. "]"
+                        SDM_DrawPill(rect.x + SDM_Scale(14, scale) + SDM_TextWidth(item.name or "", 13), labelY - SDM_Scale(2, scale), bindText, 10, 31, 34, 43, 255, 140, 146, 163)
                     end
 
                     if item.type == "toggle" then
                         if row.toggleRect then
-                            SDM_DrawCheckbox(row.toggleRect.x, row.toggleRect.y, row.toggleRect.w, item.value == true, accentR, accentG, accentB)
+                            SDM_DrawToggleSwitch(row.toggleRect.x, row.toggleRect.y, row.toggleRect.w, row.toggleRect.h, item.value == true, accentR, accentG, accentB)
                         end
                         if item.hasSlider and row.sliderRect then
                             local minV = item.sliderMin or 0.0
                             local maxV = item.sliderMax or 100.0
                             local curV = item.sliderValue or minV
                             local pct = maxV > minV and SDM_Clamp((curV - minV) / (maxV - minV), 0, 1) or 0
-                            SDM_DrawRect(row.sliderRect.x, row.sliderRect.y, row.sliderRect.w, row.sliderRect.h, 60, 62, 76, 215, math.max(2, row.sliderRect.h / 2))
+                            SDM_DrawRect(row.sliderRect.x, row.sliderRect.y, row.sliderRect.w, row.sliderRect.h, 55, 58, 72, 230, math.max(2, row.sliderRect.h / 2))
                             SDM_DrawGradientBar(row.sliderRect.x, row.sliderRect.y, row.sliderRect.w * pct, row.sliderRect.h, accentR, accentG, accentB, 255, math.max(2, row.sliderRect.h / 2))
-                            SDM_DrawRect(row.sliderRect.x + (row.sliderRect.w * pct) - SDM_Scale(4, scale), row.sliderRect.y - SDM_Scale(3, scale), SDM_Scale(8, scale), SDM_Scale(8, scale), 245, 245, 248, 255, SDM_Scale(4, scale))
+                            SDM_DrawRect(row.sliderRect.x + (row.sliderRect.w * pct) - SDM_Scale(5, scale), row.sliderRect.y - SDM_Scale(4, scale), SDM_Scale(10, scale), SDM_Scale(10, scale), 245, 245, 248, 255, SDM_Scale(5, scale))
                             if row.valueRect then
-                                SDM_DrawText(row.valueRect.x, row.valueRect.y, SDM_FormatValue(curV), 12, 167, 171, 182, 1.0)
+                                SDM_DrawPill(row.valueRect.x - SDM_Scale(6, scale), row.valueRect.y - SDM_Scale(4, scale), SDM_FormatValue(curV), 10, 30, 34, 44, 255, 205, 210, 220)
                             end
                         end
                     elseif item.type == "slider" and row.sliderRect then
@@ -4340,37 +4424,74 @@ Menu.DrawDisplayMenu = function()
                         local maxV = item.max or 100.0
                         local curV = item.value or minV
                         local pct = maxV > minV and SDM_Clamp((curV - minV) / (maxV - minV), 0, 1) or 0
-                        SDM_DrawRect(row.sliderRect.x, row.sliderRect.y, row.sliderRect.w, row.sliderRect.h, 60, 62, 76, 215, math.max(2, row.sliderRect.h / 2))
+                        SDM_DrawRect(row.sliderRect.x, row.sliderRect.y, row.sliderRect.w, row.sliderRect.h, 55, 58, 72, 230, math.max(2, row.sliderRect.h / 2))
                         SDM_DrawGradientBar(row.sliderRect.x, row.sliderRect.y, row.sliderRect.w * pct, row.sliderRect.h, accentR, accentG, accentB, 255, math.max(2, row.sliderRect.h / 2))
-                        SDM_DrawRect(row.sliderRect.x + (row.sliderRect.w * pct) - SDM_Scale(4, scale), row.sliderRect.y - SDM_Scale(3, scale), SDM_Scale(8, scale), SDM_Scale(8, scale), 245, 245, 248, 255, SDM_Scale(4, scale))
+                        SDM_DrawRect(row.sliderRect.x + (row.sliderRect.w * pct) - SDM_Scale(5, scale), row.sliderRect.y - SDM_Scale(4, scale), SDM_Scale(10, scale), SDM_Scale(10, scale), 245, 245, 248, 255, SDM_Scale(5, scale))
                         if row.valueRect then
-                            SDM_DrawText(row.valueRect.x, row.valueRect.y, SDM_FormatValue(curV), 12, 167, 171, 182, 1.0)
+                            SDM_DrawPill(row.valueRect.x - SDM_Scale(6, scale), row.valueRect.y - SDM_Scale(4, scale), SDM_FormatValue(curV), 10, 30, 34, 44, 255, 205, 210, 220)
                         end
                     elseif (item.type == "selector" or item.type == "toggle_selector") and row.selectorRect then
                         local optionText = ((item.options or {})[item.selected or 1]) or tostring(item.selected or 1)
-                        SDM_DrawRect(row.selectorRect.x, row.selectorRect.y, row.selectorRect.w, row.selectorRect.h, 31, 32, 40, 255, SDM_Scale(8, scale))
-                        SDM_DrawOutline(row.selectorRect.x, row.selectorRect.y, row.selectorRect.w, row.selectorRect.h, 63, 65, 80, 220, 1)
-                        SDM_DrawText(row.selectorRect.x + SDM_Scale(8, scale), row.selectorRect.y + SDM_Scale(6, scale), "< " .. tostring(optionText) .. " >", 12, accentR, accentG, accentB, 1.0)
+                        SDM_DrawRect(row.selectorRect.x, row.selectorRect.y, row.selectorRect.w, row.selectorRect.h, 30, 33, 42, 255, SDM_Scale(10, scale))
+                        SDM_DrawOutline(row.selectorRect.x, row.selectorRect.y, row.selectorRect.w, row.selectorRect.h, 64, 68, 84, 215, 1)
+                        SDM_DrawText(row.selectorRect.x + SDM_Scale(10, scale), row.selectorRect.y + SDM_Scale(6, scale), "<", 12, accentR, accentG, accentB, 1.0)
+                        local textW = SDM_TextWidth(tostring(optionText), 12)
+                        SDM_DrawText(row.selectorRect.x + math.floor((row.selectorRect.w - textW) / 2), row.selectorRect.y + SDM_Scale(6, scale), tostring(optionText), 12, 238, 240, 246, 1.0)
+                        SDM_DrawText(row.selectorRect.x + row.selectorRect.w - SDM_Scale(16, scale), row.selectorRect.y + SDM_Scale(6, scale), ">", 12, accentR, accentG, accentB, 1.0)
                         if row.toggleRect then
-                            SDM_DrawCheckbox(row.toggleRect.x, row.toggleRect.y, row.toggleRect.w, item.value == true, accentR, accentG, accentB)
+                            SDM_DrawToggleSwitch(row.toggleRect.x, row.toggleRect.y, row.toggleRect.w, row.toggleRect.h, item.value == true, accentR, accentG, accentB)
                         end
                     elseif item.type == "action" and row.buttonRect then
-                        SDM_DrawRect(row.buttonRect.x, row.buttonRect.y, row.buttonRect.w, row.buttonRect.h, accentR, accentG, accentB, 220, SDM_Scale(8, scale))
-                        SDM_DrawText(row.buttonRect.x + math.floor((row.buttonRect.w - SDM_TextWidth("Run", 12)) / 2), row.buttonRect.y + SDM_Scale(6, scale), "Run", 12, 19, 19, 24, 1.0)
+                        SDM_DrawRect(row.buttonRect.x, row.buttonRect.y, row.buttonRect.w, row.buttonRect.h, accentR, accentG, accentB, 72, SDM_Scale(10, scale))
+                        SDM_DrawOutline(row.buttonRect.x, row.buttonRect.y, row.buttonRect.w, row.buttonRect.h, accentR, accentG, accentB, 90, 1)
+                        local buttonLabel = row.buttonLabel or "Execute"
+                        SDM_DrawText(row.buttonRect.x + math.floor((row.buttonRect.w - SDM_TextWidth(buttonLabel, 12)) / 2), row.buttonRect.y + SDM_Scale(8, scale), buttonLabel, 12, 244, 246, 250, 1.0)
                     end
                 end
             end
         end
     end
 
+    if map.summaryRect then
+        local summary = map.summaryRect
+        SDM_DrawRect(summary.x, summary.y, summary.w, summary.h, 18, 21, 29, 248, radius)
+        SDM_DrawOutline(summary.x, summary.y, summary.w, summary.h, 38, 43, 55, 220, 1)
+        SDM_DrawGradientBar(summary.x + SDM_Scale(1, scale), summary.y + SDM_Scale(1, scale), summary.w - SDM_Scale(2, scale), SDM_Scale(3, scale), accentR, accentG, accentB, 255, SDM_Scale(2, scale))
+        SDM_DrawText(summary.x + SDM_Scale(18, scale), summary.y + SDM_Scale(16, scale), "Overview", 17, 240, 242, 247, 1.0)
+        SDM_DrawText(summary.x + SDM_Scale(18, scale), summary.y + SDM_Scale(38, scale), "Shortcuts and state for this module.", 11, 130, 138, 155, 1.0)
+
+        local infoY = summary.y + SDM_Scale(74, scale)
+        local lineGap = SDM_Scale(46, scale)
+        local info = {
+            { "Category", tostring(opened.name or "-") },
+            { "Tab", tostring(currentTab.name or "-") },
+            { "Options", tostring(map.totalItems or 0) },
+            { "Theme", tostring(Menu.CurrentTheme or "Blue") },
+            { "Menu Key", SDM_GetMenuToggleLabel() }
+        }
+
+        for index, pair in ipairs(info) do
+            local rowY = infoY + ((index - 1) * lineGap)
+            SDM_DrawText(summary.x + SDM_Scale(18, scale), rowY, pair[1], 10, 126, 133, 149, 1.0)
+            SDM_DrawText(summary.x + SDM_Scale(18, scale), rowY + SDM_Scale(15, scale), pair[2], 15, 235, 238, 244, 1.0)
+        end
+
+        local helpY = summary.y + summary.h - SDM_Scale(114, scale)
+        SDM_DrawRect(summary.x + SDM_Scale(18, scale), helpY, summary.w - SDM_Scale(36, scale), SDM_Scale(84, scale), 255, 255, 255, 4, SDM_Scale(14, scale))
+        SDM_DrawText(summary.x + SDM_Scale(32, scale), helpY + SDM_Scale(14, scale), "Controls", 12, accentR, accentG, accentB, 1.0)
+        SDM_DrawText(summary.x + SDM_Scale(32, scale), helpY + SDM_Scale(34, scale), "LMB interact with rows and controls", 11, 208, 212, 221, 1.0)
+        SDM_DrawText(summary.x + SDM_Scale(32, scale), helpY + SDM_Scale(52, scale), "RMB close current display menu", 11, 208, 212, 221, 1.0)
+        SDM_DrawText(summary.x + SDM_Scale(32, scale), helpY + SDM_Scale(70, scale), "Arrow keys still work over content", 11, 208, 212, 221, 1.0)
+    end
+
     if map.scrollbarTrack and map.scrollbarThumb then
-        SDM_DrawRect(map.scrollbarTrack.x, map.scrollbarTrack.y, map.scrollbarTrack.w, map.scrollbarTrack.h, 44, 46, 58, 150, SDM_Scale(2, scale))
+        SDM_DrawRect(map.scrollbarTrack.x, map.scrollbarTrack.y, map.scrollbarTrack.w, map.scrollbarTrack.h, 38, 42, 54, 165, SDM_Scale(2, scale))
         SDM_DrawGradientBar(map.scrollbarThumb.x, map.scrollbarThumb.y, map.scrollbarThumb.w, map.scrollbarThumb.h, accentR, accentG, accentB, 255, SDM_Scale(2, scale))
     end
 
     local footerY = panelY + panelH - footerH
     local footerText = "discord.gg/arcaneservices"
-    local footerInfo = string.format("%d options  |  right click = close", map.totalItems)
+    local footerInfo = string.format("%d options  |  RMB close", map.totalItems)
     local selectedDisplayIndex = 1
     for _, row in ipairs(map.itemRows or {}) do
         if row.itemIndex == Menu.CurrentItem then
@@ -4378,12 +4499,12 @@ Menu.DrawDisplayMenu = function()
             break
         end
     end
-    local footerRight = string.format("%d / %d", math.max(1, selectedDisplayIndex), math.max(1, map.totalItems))
+    local footerRight = string.format("%d of %d", math.max(1, selectedDisplayIndex), math.max(1, map.totalItems))
     local footerRightW = SDM_TextWidth(footerRight, 11)
     local footerInfoW = SDM_TextWidth(footerInfo, 11)
-    SDM_DrawText(panelX + SDM_Scale(14, scale), footerY + SDM_Scale(7, scale), footerText, 11, 130, 135, 147, 1.0)
-    SDM_DrawText(panelX + panelW - footerRightW - SDM_Scale(14, scale), footerY + SDM_Scale(7, scale), footerRight, 11, 130, 135, 147, 1.0)
-    SDM_DrawText(panelX + math.floor((panelW - footerInfoW) / 2), footerY + SDM_Scale(7, scale), footerInfo, 11, 103, 108, 120, 1.0)
+    SDM_DrawText(panelX + SDM_Scale(16, scale), footerY + SDM_Scale(10, scale), footerText, 11, 130, 135, 147, 1.0)
+    SDM_DrawText(panelX + panelW - footerRightW - SDM_Scale(16, scale), footerY + SDM_Scale(10, scale), footerRight, 11, 151, 158, 174, 1.0)
+    SDM_DrawText(panelX + math.floor((panelW - footerInfoW) / 2), footerY + SDM_Scale(10, scale), footerInfo, 11, 110, 116, 131, 1.0)
 end
 
 Menu.HandleDisplayMenuInput = function()
@@ -4440,8 +4561,8 @@ Menu.HandleDisplayMenuInput = function()
     for _, button in ipairs(map.categoryButtons or {}) do
         if IsPointInRect(mouseX, mouseY, button.x, button.y, button.w, button.h) then
             Menu.DisplayMenuHoverCategory = button.categoryIndex
-            Menu.CurrentCategory = button.categoryIndex
             if leftClicked and button.category and button.category.hasTabs and button.category.tabs then
+                Menu.CurrentCategory = button.categoryIndex
                 Menu.OpenedCategory = button.categoryIndex
                 Menu.CurrentTab = 1
                 Menu.DisplayMenuItemScrollOffset = 0
