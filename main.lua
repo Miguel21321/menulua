@@ -4821,6 +4821,25 @@ ResolveOverlayCursorPosition = function()
     local mouseX = nil
     local mouseY = nil
     local screenW, screenH = MenuGetScreenSize()
+    local function ReadControlNormalValue(control)
+        local value = nil
+
+        if GetDisabledControlNormal then
+            local ok, result = pcall(GetDisabledControlNormal, 0, control)
+            if ok and type(result) == "number" then
+                value = result
+            end
+        end
+
+        if type(value) ~= "number" and GetControlNormal then
+            local ok, result = pcall(GetControlNormal, 0, control)
+            if ok and type(result) == "number" then
+                value = result
+            end
+        end
+
+        return value
+    end
 
     if Susano and Susano.GetCursorPos then
         cursorPos, cursorPosY = Susano.GetCursorPos()
@@ -4857,28 +4876,26 @@ ResolveOverlayCursorPosition = function()
     end
 
     if (type(mouseX) ~= "number" or type(mouseY) ~= "number") and screenW and screenH and screenW > 0 and screenH > 0 then
-        local normX = nil
-        local normY = nil
-
-        if GetDisabledControlNormal then
-            local okX, valueX = pcall(GetDisabledControlNormal, 0, 239)
-            local okY, valueY = pcall(GetDisabledControlNormal, 0, 240)
-            if okX and type(valueX) == "number" then normX = valueX end
-            if okY and type(valueY) == "number" then normY = valueY end
-        end
-
-        if (type(normX) ~= "number" or type(normY) ~= "number") and GetControlNormal then
-            local okX, valueX = pcall(GetControlNormal, 0, 239)
-            local okY, valueY = pcall(GetControlNormal, 0, 240)
-            if okX and type(valueX) == "number" then normX = valueX end
-            if okY and type(valueY) == "number" then normY = valueY end
-        end
+        local normX = ReadControlNormalValue(239)
+        local normY = ReadControlNormalValue(240)
 
         if type(normX) == "number" and type(normY) == "number" then
             if normX >= 0 and normY >= 0 and normX <= 1.0 and normY <= 1.0 then
                 mouseX = normX * screenW
                 mouseY = normY * screenH
             end
+        end
+    end
+
+    if (type(mouseX) ~= "number" or type(mouseY) ~= "number") and screenW and screenH and screenW > 0 and screenH > 0 then
+        local baseX = type(Menu.LastOverlayMouseX) == "number" and Menu.LastOverlayMouseX or (screenW * 0.5)
+        local baseY = type(Menu.LastOverlayMouseY) == "number" and Menu.LastOverlayMouseY or (screenH * 0.5)
+        local deltaX = ReadControlNormalValue(1)
+        local deltaY = ReadControlNormalValue(2)
+
+        if type(deltaX) == "number" and type(deltaY) == "number" then
+            mouseX = baseX + (deltaX * screenW * 0.030)
+            mouseY = baseY + (deltaY * screenH * 0.045)
         end
     end
 
