@@ -502,11 +502,12 @@ end
 
 local function SetInteractiveOverlayState(enable)
     local desiredState = enable == true
+    if Menu.InteractiveOverlayEnabled == desiredState then
+        return
+    end
 
     if Susano and Susano.EnableOverlay then
-        if Menu.InteractiveOverlayEnabled ~= desiredState or desiredState then
-            Susano.EnableOverlay(desiredState)
-        end
+        Susano.EnableOverlay(desiredState)
     end
 
     Menu.InteractiveOverlayEnabled = desiredState
@@ -3552,8 +3553,75 @@ local function SDM_Normalize(value)
     return value
 end
 
+local function SDM_IsFiniteNumber(value)
+    return type(value) == "number" and value == value and value > -math.huge and value < math.huge
+end
+
+local function SDM_SanitizeRect(x, y, w, h, rounding)
+    if not SDM_IsFiniteNumber(x) or not SDM_IsFiniteNumber(y) or not SDM_IsFiniteNumber(w) or not SDM_IsFiniteNumber(h) then
+        return nil
+    end
+
+    if w <= 0 or h <= 0 then
+        return nil
+    end
+
+    local safeRounding = rounding
+    if not SDM_IsFiniteNumber(safeRounding) then
+        safeRounding = 0
+    end
+
+    safeRounding = SDM_Clamp(safeRounding, 0, math.min(w, h) * 0.5)
+    return x, y, w, h, safeRounding
+end
+
+local function SDM_DrawLineSafe(x1, y1, x2, y2, r, g, b, a, thickness)
+    if not (Susano and Susano.DrawLine) then
+        return
+    end
+
+    if not SDM_IsFiniteNumber(x1) or not SDM_IsFiniteNumber(y1) or not SDM_IsFiniteNumber(x2) or not SDM_IsFiniteNumber(y2) then
+        return
+    end
+
+    local safeThickness = thickness
+    if not SDM_IsFiniteNumber(safeThickness) then
+        safeThickness = 1.0
+    end
+
+    Susano.DrawLine(x1, y1, x2, y2, SDM_Normalize(r or 1.0), SDM_Normalize(g or 1.0), SDM_Normalize(b or 1.0), SDM_Normalize(a or 1.0), math.max(1.0, safeThickness))
+end
+
+local function SDM_DrawCircleSafe(x, y, radius, filled, r, g, b, a, thickness, segments)
+    if not (Susano and Susano.DrawCircle) then
+        return false
+    end
+
+    if not SDM_IsFiniteNumber(x) or not SDM_IsFiniteNumber(y) or not SDM_IsFiniteNumber(radius) or radius <= 0 then
+        return false
+    end
+
+    local safeThickness = thickness
+    if not SDM_IsFiniteNumber(safeThickness) then
+        safeThickness = 1.0
+    end
+
+    local safeSegments = segments
+    if not SDM_IsFiniteNumber(safeSegments) then
+        safeSegments = 20
+    end
+
+    Susano.DrawCircle(x, y, radius, filled == true, SDM_Normalize(r or 1.0), SDM_Normalize(g or 1.0), SDM_Normalize(b or 1.0), SDM_Normalize(a or 1.0), math.max(1.0, safeThickness), math.max(8, math.floor(safeSegments + 0.5)))
+    return true
+end
+
 local function SDM_DrawRect(x, y, w, h, r, g, b, a, rounding)
     if not (Susano and (Susano.DrawRectFilled or Susano.DrawFilledRect)) then
+        return
+    end
+
+    x, y, w, h, rounding = SDM_SanitizeRect(x, y, w, h, rounding)
+    if not x then
         return
     end
 
@@ -3566,6 +3634,11 @@ end
 
 local function SDM_DrawOutline(x, y, w, h, r, g, b, a, thickness)
     thickness = math.max(1, thickness or 1)
+    x, y, w, h = SDM_SanitizeRect(x, y, w, h, 0)
+    if not x then
+        return
+    end
+
     if Susano and Susano.DrawRect then
         Susano.DrawRect(x, y, w, h, SDM_Normalize(r), SDM_Normalize(g), SDM_Normalize(b), SDM_Normalize(a or 1.0), thickness)
         return
@@ -3578,6 +3651,11 @@ local function SDM_DrawOutline(x, y, w, h, r, g, b, a, thickness)
 end
 
 local function SDM_DrawGradientBar(x, y, w, h, r, g, b, a, rounding)
+    x, y, w, h, rounding = SDM_SanitizeRect(x, y, w, h, rounding)
+    if not x then
+        return
+    end
+
     if Susano and Susano.DrawRectGradient then
         local nr = SDM_Normalize(r)
         local ng = SDM_Normalize(g)
@@ -3678,7 +3756,9 @@ end
 local function SDM_GetRect()
     local layout = Menu.DisplayMenuLayout
     local screenW, screenH = MenuGetScreenSize()
-    local scale = Menu.Scale or 1.0
+    local defaultScale = Menu.DefaultScaleMultiplier or 1.0
+    local scale = (Menu.Scale or defaultScale) / math.max(0.01, defaultScale)
+    scale = SDM_Clamp(scale, 0.84, 1.22)
     local width = math.min(math.floor(layout.width * scale), math.floor(screenW * 0.91))
     local sidebarW = math.floor(layout.sidebarWidth * scale)
     local padding = SDM_Scale(layout.padding, scale)
@@ -3733,13 +3813,11 @@ local function SDM_DrawCategoryIcon(category, x, y, size, selected, accentR, acc
     end
 
     local function L(x1, y1, x2, y2, thickness)
-        Susano.DrawLine(x1, y1, x2, y2, SDM_Normalize(lineR), SDM_Normalize(lineG), SDM_Normalize(lineB), 1.0, thickness or 1.7)
+        SDM_DrawLineSafe(x1, y1, x2, y2, lineR, lineG, lineB, 1.0, thickness or 1.7)
     end
 
     local function C(cx, cy, r, filled, thickness)
-        if Susano and Susano.DrawCircle then
-            Susano.DrawCircle(cx, cy, r, filled == true, SDM_Normalize(lineR), SDM_Normalize(lineG), SDM_Normalize(lineB), 1.0, thickness or 1.6, 20)
-        else
+        if not SDM_DrawCircleSafe(cx, cy, r, filled, lineR, lineG, lineB, 1.0, thickness or 1.6, 20) then
             SDM_DrawRect(cx - r, cy - r, r * 2, r * 2, lineR, lineG, lineB, 1.0, r)
         end
     end
@@ -3818,8 +3896,8 @@ end
 
 local function SDM_DrawCheck(x, y, size, r, g, b, a)
     if Susano and Susano.DrawLine then
-        Susano.DrawLine(x + (size * 0.24), y + (size * 0.53), x + (size * 0.43), y + (size * 0.74), SDM_Normalize(r), SDM_Normalize(g), SDM_Normalize(b), SDM_Normalize(a or 1), 1.9)
-        Susano.DrawLine(x + (size * 0.43), y + (size * 0.74), x + (size * 0.78), y + (size * 0.28), SDM_Normalize(r), SDM_Normalize(g), SDM_Normalize(b), SDM_Normalize(a or 1), 1.9)
+        SDM_DrawLineSafe(x + (size * 0.24), y + (size * 0.53), x + (size * 0.43), y + (size * 0.74), r, g, b, a or 1, 1.9)
+        SDM_DrawLineSafe(x + (size * 0.43), y + (size * 0.74), x + (size * 0.78), y + (size * 0.28), r, g, b, a or 1, 1.9)
     else
         SDM_DrawText(x + (size * 0.18), y, "v", 11, r, g, b, a)
     end
@@ -4729,19 +4807,16 @@ local function IsPointInRect(px, py, x, y, width, height)
     return px >= x and px <= (x + width) and py >= y and py <= (y + height)
 end
 
-local function ResolveOverlayCursorPosition()
+ResolveOverlayCursorPosition = function()
     if not (Susano and Susano.GetCursorPos) then
         return nil
     end
 
-    local cursorPos, cursorPosY = Susano.GetCursorPos()
+    local cursorPos = Susano.GetCursorPos()
     local mouseX = nil
     local mouseY = nil
 
-    if type(cursorPos) == "number" and type(cursorPosY) == "number" then
-        mouseX = cursorPos
-        mouseY = cursorPosY
-    elseif cursorPos then
+    if cursorPos then
         if type(cursorPos) == "table" then
             mouseX = cursorPos.x or cursorPos[1]
             mouseY = cursorPos.y or cursorPos[2]
@@ -4781,7 +4856,7 @@ local function ResolveOverlayCursorPosition()
     return mouseX, mouseY
 end
 
-local function GetOverlayMouseState()
+GetOverlayMouseState = function()
     if not (Susano and Susano.GetCursorPos) then
         return nil
     end
@@ -4822,6 +4897,10 @@ local function GetClickableCursorAccentColor()
 end
 
 local function DrawClickableCursorLine(x1, y1, x2, y2, r, g, b, a, thickness)
+    if not SDM_IsFiniteNumber(x1) or not SDM_IsFiniteNumber(y1) or not SDM_IsFiniteNumber(x2) or not SDM_IsFiniteNumber(y2) then
+        return
+    end
+
     if Susano and Susano.DrawLine then
         Susano.DrawLine(x1, y1, x2, y2, r, g, b, a, thickness)
     elseif Susano and Susano.DrawRectFilled then
@@ -4873,8 +4952,10 @@ local function DrawPointerCursor(mouseX, mouseY, pressed)
     DrawClickableCursorLine(mouseX + PX(4) + offsetX, mouseY + PX(14) + offsetY, mouseX + PX(9) + offsetX, mouseY + PX(22) + offsetY, accentR, accentG, accentB, 1.0, 2.1)
     DrawClickableCursorLine(mouseX + PX(1) + offsetX, mouseY + PX(1) + offsetY, mouseX + PX(4) + offsetX, mouseY + PX(4) + offsetY, accentR, accentG, accentB, 0.90, 1.6)
 
-    if Susano and Susano.DrawCircle then
-        Susano.DrawCircle(mouseX + offsetX, mouseY + offsetY, (pressed and 2.5 or 2.0) * cursorScale, true, accentR, accentG, accentB, pressed and 0.95 or 0.75, 1.0, 18)
+    if not SDM_DrawCircleSafe(mouseX + offsetX, mouseY + offsetY, (pressed and 2.5 or 2.0) * cursorScale, true, accentR, accentG, accentB, pressed and 0.95 or 0.75, 1.0, 18) then
+        if Susano and Susano.DrawRectFilled then
+            Susano.DrawRectFilled(mouseX - 1 + offsetX, mouseY - 1 + offsetY, PX(3), PX(3), accentR, accentG, accentB, pressed and 0.95 or 0.75, 1)
+        end
     elseif Susano and Susano.DrawRectFilled then
         Susano.DrawRectFilled(mouseX - 1 + offsetX, mouseY - 1 + offsetY, PX(3), PX(3), accentR, accentG, accentB, pressed and 0.95 or 0.75, 1)
     end
