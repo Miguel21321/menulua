@@ -120,6 +120,7 @@ Menu.DuiDisplayMenuHeight = 0
 Menu.DuiDisplayMenuHtml = nil
 Menu.DuiDisplayMenuCreatedAt = 0
 Menu.DuiDisplayMenuInitError = nil
+Menu.DuiDisplayMenuDisabled = false
 Menu.DuiDisplayMenuMissingLogged = false
 Menu.DuiDisplayMenuMouseLeftDown = false
 Menu.DuiDisplayMenuMouseRightDown = false
@@ -794,10 +795,10 @@ function Menu.ShouldUseDuiDisplayMenu()
         Menu.DuiDisplayMenuMissingLogged = false
     end
 
-    return supported and not Menu.ShouldUseNuiDisplayMenu()
+    return supported and not Menu.DuiDisplayMenuDisabled and not Menu.ShouldUseNuiDisplayMenu()
 end
 
-function Menu.DestroyDuiDisplayMenu()
+function Menu.DestroyDuiDisplayMenu(preserveFailureState)
     if Menu.DuiDisplayMenuObject then
         pcall(DestroyDui, Menu.DuiDisplayMenuObject)
     end
@@ -811,10 +812,22 @@ function Menu.DestroyDuiDisplayMenu()
     Menu.DuiDisplayMenuVisible = false
     Menu.DuiDisplayMenuWidth = 0
     Menu.DuiDisplayMenuHeight = 0
-    Menu.DuiDisplayMenuInitError = nil
-    Menu.DuiDisplayMenuCreatedAt = 0
+    if not preserveFailureState then
+        Menu.DuiDisplayMenuInitError = nil
+        Menu.DuiDisplayMenuCreatedAt = 0
+    end
     Menu.DuiDisplayMenuMouseLeftDown = false
     Menu.DuiDisplayMenuMouseRightDown = false
+end
+
+local function DisableDuiDisplayMenu(reason, logMessage)
+    if Menu.DuiDisplayMenuInitError ~= reason and logMessage then
+        print(logMessage)
+    end
+
+    Menu.DuiDisplayMenuInitError = reason
+    Menu.DuiDisplayMenuDisabled = true
+    Menu.DestroyDuiDisplayMenu(true)
 end
 
 local function EnsureDuiDisplayMenuReady(screenW, screenH)
@@ -832,10 +845,7 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
     if not Menu.DuiDisplayMenuHtml then
         Menu.DuiDisplayMenuHtml = ArcaneBuildDuiHtml()
         if not Menu.DuiDisplayMenuHtml then
-            if Menu.DuiDisplayMenuInitError ~= "assets" then
-                Menu.DuiDisplayMenuInitError = "assets"
-                print("Arcane DUI error: could not read ui/dui.html, ui/dui.css or ui/dui.js")
-            end
+            DisableDuiDisplayMenu("assets", "Arcane DUI error: could not read ui/dui.html, ui/dui.css or ui/dui.js")
             return false
         end
     end
@@ -851,9 +861,8 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
         Menu.DuiDisplayMenuHeight = targetH
         Menu.DuiDisplayMenuCreatedAt = GetGameTimer and GetGameTimer() or 0
         Menu.DuiDisplayMenuTxdHandle = CreateRuntimeTxd(Menu.DuiDisplayMenuTxdName)
-        if not Menu.DuiDisplayMenuObject and Menu.DuiDisplayMenuInitError ~= "create" then
-            Menu.DuiDisplayMenuInitError = "create"
-            print("Arcane DUI error: CreateDui returned nil")
+        if not Menu.DuiDisplayMenuObject then
+            DisableDuiDisplayMenu("create", "Arcane DUI error: CreateDui returned nil")
         end
     end
 
@@ -863,9 +872,8 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
 
     if not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
         local now = GetGameTimer and GetGameTimer() or 0
-        if (now - (Menu.DuiDisplayMenuCreatedAt or 0)) > 1800 and Menu.DuiDisplayMenuInitError ~= "load" then
-            Menu.DuiDisplayMenuInitError = "load"
-            print("Arcane DUI error: browser never became available")
+        if (now - (Menu.DuiDisplayMenuCreatedAt or 0)) > 1800 then
+            DisableDuiDisplayMenu("load", "Arcane DUI error: browser never became available")
         end
         return false
     end
@@ -876,9 +884,8 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
 
     if Menu.DuiDisplayMenuHandle and Menu.DuiDisplayMenuTxdHandle and not Menu.DuiDisplayMenuTextureHandle then
         Menu.DuiDisplayMenuTextureHandle = CreateRuntimeTextureFromDuiHandle(Menu.DuiDisplayMenuTxdHandle, Menu.DuiDisplayMenuTxnName, Menu.DuiDisplayMenuHandle)
-        if not Menu.DuiDisplayMenuTextureHandle and Menu.DuiDisplayMenuInitError ~= "texture" then
-            Menu.DuiDisplayMenuInitError = "texture"
-            print("Arcane DUI error: CreateRuntimeTextureFromDuiHandle failed")
+        if not Menu.DuiDisplayMenuTextureHandle then
+            DisableDuiDisplayMenu("texture", "Arcane DUI error: CreateRuntimeTextureFromDuiHandle failed")
         end
     end
 
@@ -4542,6 +4549,26 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
         columnHeights[shortest] = columnHeights[shortest] + sectionHeight + sectionGap
     end
 
+    if columnCount > 1 and #placements > 1 then
+        local rowMaxHeights = {}
+        for _, placement in ipairs(placements) do
+            local key = tostring(math.floor((placement.top or 0) + 0.5))
+            rowMaxHeights[key] = math.max(rowMaxHeights[key] or 0, placement.height or 0)
+        end
+
+        local recalculatedHeights = {}
+        for _, placement in ipairs(placements) do
+            local key = tostring(math.floor((placement.top or 0) + 0.5))
+            placement.height = rowMaxHeights[key] or placement.height
+            local rowBottom = (placement.top or 0) + (placement.height or 0)
+            recalculatedHeights[placement.col] = math.max(recalculatedHeights[placement.col] or 0, rowBottom)
+        end
+
+        for col = 1, columnCount do
+            columnHeights[col] = recalculatedHeights[col] or 0
+        end
+    end
+
     local contentHeight = 0
     for col = 1, columnCount do
         contentHeight = math.max(contentHeight, math.max(0, columnHeights[col] - sectionGap))
@@ -4870,13 +4897,13 @@ function Menu.BuildDuiDisplayMenuPayload(openedCategory, currentTab, map, panelX
     }
 end
 
-function Menu.SyncDuiDisplayMenu(force, openedCategory, currentTab, map, panelX, panelY, panelW, panelH, scale)
+function Menu.SyncDuiDisplayMenu(force, openedCategory, currentTab, map, panelX, panelY, panelW, panelH, scale, duiAlreadyReady)
     if not Menu.ShouldUseDuiDisplayMenu() then
         return
     end
 
     local screenW, screenH = MenuGetScreenSize()
-    if not EnsureDuiDisplayMenuReady(screenW, screenH) then
+    if not duiAlreadyReady and not EnsureDuiDisplayMenuReady(screenW, screenH) then
         return
     end
 
@@ -4919,8 +4946,12 @@ Menu.DrawDisplayMenu = function()
     Menu.DisplayMenuCurrentMap = map
 
     if Menu.ShouldUseDuiDisplayMenu() then
-        Menu.SyncDuiDisplayMenu(false, opened, currentTab, map, panelX, panelY, panelW, panelH, scale)
-        if EnsureDuiDisplayMenuReady(MenuGetScreenSize()) and Menu.DuiDisplayMenuTxdName and Menu.DuiDisplayMenuTxnName then
+        local screenW, screenH = MenuGetScreenSize()
+        local duiReady = EnsureDuiDisplayMenuReady(screenW, screenH)
+        if duiReady then
+            Menu.SyncDuiDisplayMenu(false, opened, currentTab, map, panelX, panelY, panelW, panelH, scale, true)
+        end
+        if duiReady and Menu.DuiDisplayMenuTxdName and Menu.DuiDisplayMenuTxnName then
             DrawSprite(Menu.DuiDisplayMenuTxdName, Menu.DuiDisplayMenuTxnName, 0.5, 0.5, 1.0, 1.0, 0.0, 255, 255, 255, 255)
             return
         end
@@ -5611,6 +5642,15 @@ function Menu.ApplySpecialToggleState(item)
         Menu.DisplayMenuRightWasDown = false
         Menu.DisplayMenuItemScrollOffset = 0
         Menu.DisplayMenuCurrentMap = nil
+        if Menu.DisplayMenu then
+            Menu.DuiDisplayMenuDisabled = false
+            Menu.DuiDisplayMenuInitError = nil
+            Menu.DuiDisplayMenuCreatedAt = 0
+            Menu.DuiDisplayMenuDirty = true
+            Menu.DuiDisplayMenuLastSyncAt = 0
+        elseif Menu.DestroyDuiDisplayMenu then
+            Menu.DestroyDuiDisplayMenu(false)
+        end
     elseif item.name == "Editor Mode" then
         Menu.EditorMode = item.value == true
     elseif item.name == "Flakes" then
