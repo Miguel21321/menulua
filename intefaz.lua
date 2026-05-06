@@ -616,6 +616,25 @@ local function ArcaneReadMenuTextFile(relativePath)
                 return data
             end
         end
+
+        if type(_G) == "table" and type(_G.__ARCANE_BASE_DIR) == "string" and _G.__ARCANE_BASE_DIR ~= "" then
+            local absolutePath = _G.__ARCANE_BASE_DIR .. relativePath
+            local absOk, absHandle = pcall(function()
+                return io.open(absolutePath, "rb")
+            end)
+
+            if absOk and absHandle then
+                local absReadOk, absData = pcall(function()
+                    local content = absHandle:read("*a")
+                    absHandle:close()
+                    return content
+                end)
+
+                if absReadOk and type(absData) == "string" and absData ~= "" then
+                    return absData
+                end
+            end
+        end
     end
 
     return nil
