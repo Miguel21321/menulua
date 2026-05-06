@@ -527,6 +527,7 @@ end
 local DrawClickableCursor
 local ResolveOverlayCursorPosition
 local GetOverlayMouseState
+local IsPointInRect
 
 local function CleanupNotifications()
     if not Menu.Notifications then
@@ -4812,7 +4813,7 @@ function Menu.ApplySpecialToggleState(item)
     SetInteractiveOverlayState(IsInteractiveOverlayActive())
 end
 
-local function IsPointInRect(px, py, x, y, width, height)
+IsPointInRect = function(px, py, x, y, width, height)
     return px >= x and px <= (x + width) and py >= y and py <= (y + height)
 end
 
