@@ -3507,30 +3507,30 @@ end
 
 
 Menu.DisplayMenuLayout = {
-    width = 1040,
-    height = 610,
-    minHeight = 540,
+    width = 980,
+    height = 540,
+    minHeight = 430,
     maxHeightRatio = 0.88,
-    sidebarWidth = 236,
-    brandHeight = 58,
-    searchHeight = 36,
-    headerHeight = 56,
-    footerHeight = 30,
-    padding = 16,
-    categoryHeight = 36,
-    categoryGap = 4,
-    tabHeight = 36,
+    sidebarWidth = 214,
+    brandHeight = 54,
+    searchHeight = 34,
+    headerHeight = 52,
+    footerHeight = 28,
+    padding = 14,
+    categoryHeight = 32,
+    categoryGap = 3,
+    tabHeight = 34,
     tabGap = 8,
-    sectionGap = 14,
-    sectionHeaderHeight = 24,
-    sectionPaddingX = 14,
-    sectionPaddingY = 12,
-    sectionRadius = 14,
+    sectionGap = 12,
+    sectionHeaderHeight = 22,
+    sectionPaddingX = 16,
+    sectionPaddingY = 14,
+    sectionRadius = 16,
     rowGap = 8,
-    itemHeight = 28,
+    itemHeight = 30,
     sliderHeight = 6,
-    controlWidth = 172,
-    scrollStep = 42
+    controlWidth = 176,
+    scrollStep = 36
 }
 
 local function SDM_Scale(value, scale)
@@ -3692,6 +3692,14 @@ local SDM_EnsureOpenedCategory
 local SDM_ItemHeight
 local SDM_BuildSections
 
+local function SDM_GetSectionColumnCount(sections, areaW, scale)
+    if not sections or #sections <= 2 then
+        return 1
+    end
+
+    return areaW >= SDM_Scale(760, scale) and 2 or 1
+end
+
 local function SDM_MeasureSidebarHeight(scale)
     local layout = Menu.DisplayMenuLayout
     local categoryCount = Menu.Categories and math.max(0, #Menu.Categories - 1) or 0
@@ -3716,7 +3724,7 @@ local function SDM_MeasureTabContentHeight(tab, areaW, scale)
         return SDM_Scale(180, scale)
     end
 
-    local columnCount = areaW >= SDM_Scale(700, scale) and 2 or 1
+    local columnCount = SDM_GetSectionColumnCount(sections, areaW, scale)
     local sectionGap = SDM_Scale(layout.sectionGap, scale)
     local rowGap = SDM_Scale(layout.rowGap, scale)
     local sectionBaseHeight = SDM_Scale(layout.sectionHeaderHeight + (layout.sectionPaddingY * 2), scale)
@@ -4054,7 +4062,7 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
     end
 
     local sections = SDM_BuildSections(currentTab)
-    local columnCount = areaW >= SDM_Scale(760, scale) and 2 or 1
+    local columnCount = SDM_GetSectionColumnCount(sections, areaW, scale)
     local sectionGap = SDM_Scale(layout.sectionGap, scale)
     local sectionWidth = math.floor((areaW - (sectionGap * math.max(0, columnCount - 1))) / math.max(1, columnCount))
     local columnHeights = {}
@@ -4092,6 +4100,7 @@ local function SDM_BuildMap(openedCategory, currentTab, panelX, panelY, panelW, 
     Menu.DisplayMenuItemScrollOffset = scrollOffset
     map.scrollOffset = scrollOffset
     map.scrollRange = scrollRange
+    map.visualContentHeight = math.min(areaH, math.max(contentHeight + SDM_Scale(8, scale), SDM_Scale(210, scale)))
 
     local sectionPadX = SDM_Scale(layout.sectionPaddingX, scale)
     local sectionPadY = SDM_Scale(layout.sectionPaddingY, scale)
@@ -4242,7 +4251,7 @@ Menu.DrawDisplayMenu = function()
     local headerInfoW = SDM_TextWidth(headerInfo, 11)
     SDM_DrawText(panelX + sidebarW + SDM_Scale(layout.padding, scale), panelY + SDM_Scale(15, scale), headerLabel, 16, 242, 242, 246, 1.0)
     SDM_DrawText(panelX + panelW - headerInfoW - SDM_Scale(layout.padding, scale), panelY + SDM_Scale(18, scale), headerInfo, 11, 134, 138, 150, 1.0)
-    SDM_DrawRect(map.contentArea.x, map.contentArea.y, map.contentArea.w, map.contentArea.h, 17, 18, 24, 110, SDM_Scale(12, scale))
+    SDM_DrawRect(map.contentArea.x, map.contentArea.y, map.contentArea.w, map.visualContentHeight or map.contentArea.h, 17, 18, 24, 110, SDM_Scale(12, scale))
 
     for _, tabButton in ipairs(map.tabButtons) do
         local isActive = tabButton.tabIndex == Menu.CurrentTab
@@ -4808,13 +4817,14 @@ local function IsPointInRect(px, py, x, y, width, height)
 end
 
 ResolveOverlayCursorPosition = function()
-    if not (Susano and Susano.GetCursorPos) then
-        return nil
-    end
-
-    local cursorPos = Susano.GetCursorPos()
+    local cursorPos = nil
     local mouseX = nil
     local mouseY = nil
+    local screenW, screenH = MenuGetScreenSize()
+
+    if Susano and Susano.GetCursorPos then
+        cursorPos = Susano.GetCursorPos()
+    end
 
     if cursorPos then
         if type(cursorPos) == "table" then
@@ -4835,11 +4845,47 @@ ResolveOverlayCursorPosition = function()
         end
     end
 
+    if (type(mouseX) ~= "number" or type(mouseY) ~= "number") and GetNuiCursorPosition then
+        local ok, nuiX, nuiY = pcall(GetNuiCursorPosition)
+        if ok and type(nuiX) == "number" and type(nuiY) == "number" then
+            mouseX = nuiX
+            mouseY = nuiY
+        end
+    end
+
+    if (type(mouseX) ~= "number" or type(mouseY) ~= "number") and screenW and screenH and screenW > 0 and screenH > 0 then
+        local normX = nil
+        local normY = nil
+
+        if GetDisabledControlNormal then
+            local okX, valueX = pcall(GetDisabledControlNormal, 0, 239)
+            local okY, valueY = pcall(GetDisabledControlNormal, 0, 240)
+            if okX and type(valueX) == "number" then normX = valueX end
+            if okY and type(valueY) == "number" then normY = valueY end
+        end
+
+        if (type(normX) ~= "number" or type(normY) ~= "number") and GetControlNormal then
+            local okX, valueX = pcall(GetControlNormal, 0, 239)
+            local okY, valueY = pcall(GetControlNormal, 0, 240)
+            if okX and type(valueX) == "number" then normX = valueX end
+            if okY and type(valueY) == "number" then normY = valueY end
+        end
+
+        if type(normX) == "number" and type(normY) == "number" then
+            if normX >= 0 and normY >= 0 and normX <= 1.0 and normY <= 1.0 then
+                mouseX = normX * screenW
+                mouseY = normY * screenH
+            end
+        end
+    end
+
     if type(mouseX) ~= "number" or type(mouseY) ~= "number" then
+        if type(Menu.LastOverlayMouseX) == "number" and type(Menu.LastOverlayMouseY) == "number" then
+            return Menu.LastOverlayMouseX, Menu.LastOverlayMouseY
+        end
         return nil
     end
 
-    local screenW, screenH = MenuGetScreenSize()
     if screenW and screenH and screenW > 0 and screenH > 0 then
         if mouseX >= 0 and mouseY >= 0 and mouseX <= 1.0 and mouseY <= 1.0 then
             mouseX = mouseX * screenW
@@ -4853,14 +4899,12 @@ ResolveOverlayCursorPosition = function()
         mouseY = math.max(0, math.min(screenH, mouseY))
     end
 
+    Menu.LastOverlayMouseX = mouseX
+    Menu.LastOverlayMouseY = mouseY
     return mouseX, mouseY
 end
 
 GetOverlayMouseState = function()
-    if not (Susano and Susano.GetCursorPos) then
-        return nil
-    end
-
     local mouseX, mouseY = ResolveOverlayCursorPosition()
     if not mouseX or not mouseY then
         return nil
@@ -4871,9 +4915,35 @@ GetOverlayMouseState = function()
     local rightDown = false
     local rightPressed = false
 
-    if Susano.GetAsyncKeyState then
+    if Susano and Susano.GetAsyncKeyState then
         leftDown, leftPressed = Susano.GetAsyncKeyState(0x01)
         rightDown, rightPressed = Susano.GetAsyncKeyState(0x02)
+    end
+
+    if not leftDown and IsDisabledControlPressed then
+        leftDown = IsDisabledControlPressed(0, 24)
+    end
+    if not rightDown and IsDisabledControlPressed then
+        rightDown = IsDisabledControlPressed(0, 25)
+    end
+    if not leftDown and IsControlPressed then
+        leftDown = IsControlPressed(0, 24)
+    end
+    if not rightDown and IsControlPressed then
+        rightDown = IsControlPressed(0, 25)
+    end
+
+    if not leftPressed and IsDisabledControlJustPressed then
+        leftPressed = IsDisabledControlJustPressed(0, 24)
+    end
+    if not rightPressed and IsDisabledControlJustPressed then
+        rightPressed = IsDisabledControlJustPressed(0, 25)
+    end
+    if not leftPressed and IsControlJustPressed then
+        leftPressed = IsControlJustPressed(0, 24)
+    end
+    if not rightPressed and IsControlJustPressed then
+        rightPressed = IsControlJustPressed(0, 25)
     end
 
     return mouseX, mouseY,
@@ -4916,7 +4986,7 @@ local function DrawPointerCursor(mouseX, mouseY, pressed)
     local accentR, accentG, accentB = GetClickableCursorAccentColor()
     local offsetX = pressed and -0.5 or 0.0
     local offsetY = pressed and 0.5 or 0.0
-    local cursorScale = (Menu.DisplayMenu and Menu.Visible) and 1.18 or 1.0
+    local cursorScale = (Menu.DisplayMenu and Menu.Visible) and 1.35 or 1.0
     local function PX(value)
         return value * cursorScale
     end
@@ -4951,6 +5021,8 @@ local function DrawPointerCursor(mouseX, mouseY, pressed)
 
     DrawClickableCursorLine(mouseX + PX(4) + offsetX, mouseY + PX(14) + offsetY, mouseX + PX(9) + offsetX, mouseY + PX(22) + offsetY, accentR, accentG, accentB, 1.0, 2.1)
     DrawClickableCursorLine(mouseX + PX(1) + offsetX, mouseY + PX(1) + offsetY, mouseX + PX(4) + offsetX, mouseY + PX(4) + offsetY, accentR, accentG, accentB, 0.90, 1.6)
+
+    SDM_DrawCircleSafe(mouseX + PX(2), mouseY + PX(2), PX(7), false, accentR, accentG, accentB, 0.18, 1.0, 18)
 
     if not SDM_DrawCircleSafe(mouseX + offsetX, mouseY + offsetY, (pressed and 2.5 or 2.0) * cursorScale, true, accentR, accentG, accentB, pressed and 0.95 or 0.75, 1.0, 18) then
         if Susano and Susano.DrawRectFilled then
