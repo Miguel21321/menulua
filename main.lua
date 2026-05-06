@@ -51,9 +51,25 @@ Menu.ShowBlossoms = false
 Menu.ShowSpectatorList = false
 Menu.SpectatorEntries = {}
 Menu.SpectatorListAlpha = 0.0
+
+local function ArcaneHasResourceUiPage()
+    if type(GetCurrentResourceName) ~= "function" or type(GetResourceMetadata) ~= "function" then
+        return false
+    end
+
+    local ok, resourceName = pcall(GetCurrentResourceName)
+    if not ok or type(resourceName) ~= "string" or resourceName == "" then
+        return false
+    end
+
+    local metadataOk, uiPage = pcall(GetResourceMetadata, resourceName, "ui_page", 0)
+    return metadataOk and type(uiPage) == "string" and uiPage ~= ""
+end
+
 Menu.ClickableMenu = false
 Menu.DisplayMenu = false
-Menu.NuiDisplayMenuSupported = type(SendNUIMessage) == "function"
+Menu.NuiDisplayMenuSupported = ArcaneHasResourceUiPage()
+    and type(SendNUIMessage) == "function"
     and type(SetNuiFocus) == "function"
     and type(RegisterNUICallback) == "function"
 Menu.NuiDisplayMenuVisible = false
