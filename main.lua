@@ -4816,6 +4816,9 @@ end
 IsPointInRect = function(px, py, x, y, width, height)
     return px >= x and px <= (x + width) and py >= y and py <= (y + height)
 end
+if type(_G) == "table" then
+    _G.IsPointInRect = IsPointInRect
+end
 
 ResolveOverlayCursorPosition = function()
     local cursorPos = nil
@@ -4904,6 +4907,9 @@ ResolveOverlayCursorPosition = function()
     Menu.LastOverlayMouseY = mouseY
     return mouseX, mouseY
 end
+if type(_G) == "table" then
+    _G.ResolveOverlayCursorPosition = ResolveOverlayCursorPosition
+end
 
 GetOverlayMouseState = function()
     local mouseX, mouseY = ResolveOverlayCursorPosition()
@@ -4950,6 +4956,9 @@ GetOverlayMouseState = function()
     return mouseX, mouseY,
         (leftDown == true or leftDown == 1), leftPressed == true,
         (rightDown == true or rightDown == 1), rightPressed == true
+end
+if type(_G) == "table" then
+    _G.GetOverlayMouseState = GetOverlayMouseState
 end
 
 local function GetClickableCursorAccentColor()
