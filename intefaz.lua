@@ -711,13 +711,19 @@ local function ArcaneBuildDuiHtml()
         return nil
     end
 
-    html = html:gsub('<link%s+rel="stylesheet"%s+href="dui.css"%s*/?>', function()
-        return "<style>\n" .. css .. "\n</style>"
-    end, 1)
+    local function replaceOnce(source, pattern, replacement)
+        local startAt, endAt = string.find(source, pattern)
+        if not startAt then
+            return source
+        end
 
-    html = html:gsub('<script%s+src="dui.js"%s*></script>', function()
-        return '<script>window.__ARCANE_DUI__ = true;</script><script>\n' .. js .. '\n</script>'
-    end, 1)
+        return string.sub(source, 1, startAt - 1)
+            .. replacement
+            .. string.sub(source, endAt + 1)
+    end
+
+    html = replaceOnce(html, '<link%s+rel="stylesheet"%s+href="dui.css"%s*/?>', "<style>\n" .. css .. "\n</style>")
+    html = replaceOnce(html, '<script%s+src="dui.js"%s*></script>', '<script>window.__ARCANE_DUI__ = true;</script><script>\n' .. js .. '\n</script>')
     return html
 end
 
