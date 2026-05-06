@@ -852,6 +852,10 @@ function Menu.BlockGameplayInput()
         return
     end
 
+    if Menu.DisplayMenu then
+        return
+    end
+
     if not DisableControlAction then
         return
     end
@@ -862,15 +866,6 @@ function Menu.BlockGameplayInput()
 
             if DisableDisabledControlAction then
                 DisableDisabledControlAction(group, control, true)
-            end
-        end
-
-        if Menu.DisplayMenu then
-            for _, control in ipairs({ 1, 2, 24, 25, 30, 31, 32, 33, 34, 35, 68, 69, 70, 91, 92, 106, 107, 114, 115, 140, 141, 142, 257, 329, 330, 331, 332 }) do
-                DisableControlAction(group, control, true)
-                if DisableDisabledControlAction then
-                    DisableDisabledControlAction(group, control, true)
-                end
             end
         end
     end
@@ -4822,16 +4817,20 @@ end
 
 ResolveOverlayCursorPosition = function()
     local cursorPos = nil
+    local cursorPosY = nil
     local mouseX = nil
     local mouseY = nil
     local screenW, screenH = MenuGetScreenSize()
 
     if Susano and Susano.GetCursorPos then
-        cursorPos = Susano.GetCursorPos()
+        cursorPos, cursorPosY = Susano.GetCursorPos()
     end
 
     if cursorPos then
-        if type(cursorPos) == "table" then
+        if type(cursorPos) == "number" and type(cursorPosY) == "number" then
+            mouseX = cursorPos
+            mouseY = cursorPosY
+        elseif type(cursorPos) == "table" then
             mouseX = cursorPos.x or cursorPos[1]
             mouseY = cursorPos.y or cursorPos[2]
         else
@@ -5044,11 +5043,7 @@ local function DrawPointerCursor(mouseX, mouseY, pressed)
 end
 
 DrawClickableCursor = function()
-    if not Susano or not Susano.GetCursorPos or not IsInteractiveOverlayActive() then
-        return
-    end
-
-    if Menu.Visible and Menu.DisplayMenu then
+    if not Susano or not IsInteractiveOverlayActive() then
         return
     end
 
