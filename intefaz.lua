@@ -752,6 +752,10 @@ local function ArcaneBuildDuiUrl(html)
         return nil
     end
 
+    if type(_G) == "table" and type(_G.__ARCANE_DUI_REMOTE_URL) == "string" and _G.__ARCANE_DUI_REMOTE_URL ~= "" then
+        return _G.__ARCANE_DUI_REMOTE_URL
+    end
+
     if io and type(io.open) == "function" and type(_G) == "table" and type(_G.__ARCANE_BASE_DIR) == "string" and _G.__ARCANE_BASE_DIR ~= "" then
         local runtimePath = _G.__ARCANE_BASE_DIR .. "ui\\dui.runtime.html"
         local writeOk = pcall(function()
@@ -4291,7 +4295,7 @@ local function SDM_DrawCategoryIcon(category, x, y, size, selected, accentR, acc
     local bgG = selected and accentG or 35
     local bgB = selected and accentB or 46
     local radius = math.max(5, size * 0.28)
-    local glyph = SDM_GetCategoryMonogram(category and category.name or "")
+    local glyph = SDM_GetGlyph(category or {})
 
     SDM_DrawRect(x, y, size, size, bgR, bgG, bgB, selected and 0.20 or 0.10, radius)
     SDM_DrawOutline(x, y, size, size, selected and accentR or 68, selected and accentG or 74, selected and accentB or 88, selected and 132 or 106, 1)
@@ -4752,7 +4756,7 @@ function Menu.BuildDuiDisplayMenuPayload(openedCategory, currentTab, map, panelX
         categoryButtons[#categoryButtons + 1] = {
             categoryIndex = button.categoryIndex,
             label = button.category and button.category.name or "",
-            mono = SDM_GetCategoryMonogram(button.category and button.category.name or ""),
+            mono = SDM_GetGlyph(button.category or {}),
             active = Menu.OpenedCategory == button.categoryIndex,
             hover = Menu.DisplayMenuHoverCategory == button.categoryIndex,
             rect = SDM_CopyRect(button)
