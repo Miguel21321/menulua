@@ -71,15 +71,31 @@ local function ArcaneHasResourceUiPage()
     return metadataOk and type(uiPage) == "string" and uiPage ~= ""
 end
 
+local function ArcaneGetMissingDuiCoreNatives()
+    local missing = {}
+    local required = {
+        CreateDui = CreateDui,
+        GetDuiHandle = GetDuiHandle,
+        CreateRuntimeTxd = CreateRuntimeTxd,
+        CreateRuntimeTextureFromDuiHandle = CreateRuntimeTextureFromDuiHandle,
+        DestroyDui = DestroyDui,
+        IsDuiAvailable = IsDuiAvailable,
+        SendDuiMessage = SendDuiMessage,
+        DrawSprite = DrawSprite
+    }
+
+    for name, fn in pairs(required) do
+        if type(fn) ~= "function" then
+            missing[#missing + 1] = name
+        end
+    end
+
+    table.sort(missing)
+    return missing
+end
+
 local function ArcaneCanUseDuiDisplayMenu()
-    return type(CreateDui) == "function"
-        and type(GetDuiHandle) == "function"
-        and type(CreateRuntimeTxd) == "function"
-        and type(CreateRuntimeTextureFromDuiHandle) == "function"
-        and type(IsDuiAvailable) == "function"
-        and type(DestroyDui) == "function"
-        and type(SendDuiMessage) == "function"
-        and type(DrawSprite) == "function"
+    return #ArcaneGetMissingDuiCoreNatives() == 0
 end
 
 Menu.ClickableMenu = false
@@ -88,7 +104,7 @@ Menu.NuiDisplayMenuSupported = ArcaneHasResourceUiPage()
     and type(SendNUIMessage) == "function"
     and type(SetNuiFocus) == "function"
     and type(RegisterNUICallback) == "function"
-Menu.DuiDisplayMenuSupported = ArcaneCanUseDuiDisplayMenu()
+Menu.DuiDisplayMenuSupported = false
 Menu.DuiDisplayMenuVisible = false
 Menu.DuiDisplayMenuDirty = true
 Menu.DuiDisplayMenuLastSyncAt = 0
@@ -103,6 +119,7 @@ Menu.DuiDisplayMenuWidth = 0
 Menu.DuiDisplayMenuHeight = 0
 Menu.DuiDisplayMenuHtml = nil
 Menu.DuiDisplayMenuInitError = nil
+Menu.DuiDisplayMenuMissingLogged = false
 Menu.DuiDisplayMenuMouseLeftDown = false
 Menu.DuiDisplayMenuMouseRightDown = false
 Menu.NuiDisplayMenuVisible = false
@@ -566,6 +583,13 @@ local function ArcaneReadMenuTextFile(relativePath)
         return nil
     end
 
+    if type(_G) == "table" and type(_G.__ARCANE_EMBEDDED_FILES) == "table" then
+        local embedded = _G.__ARCANE_EMBEDDED_FILES[relativePath]
+        if type(embedded) == "string" and embedded ~= "" then
+            return embedded
+        end
+    end
+
     if type(LoadResourceFile) == "function" and type(GetCurrentResourceName) == "function" then
         local ok, data = pcall(function()
             return LoadResourceFile(GetCurrentResourceName(), relativePath)
@@ -693,7 +717,20 @@ local function ArcaneBuildDuiHtml()
 end
 
 function Menu.ShouldUseDuiDisplayMenu()
-    return Menu.DuiDisplayMenuSupported == true and not Menu.ShouldUseNuiDisplayMenu()
+    local supported = ArcaneCanUseDuiDisplayMenu()
+    Menu.DuiDisplayMenuSupported = supported
+
+    if not supported and not Menu.DuiDisplayMenuMissingLogged then
+        local missing = ArcaneGetMissingDuiCoreNatives()
+        if #missing > 0 then
+            print("Arcane DUI unavailable: missing natives -> " .. table.concat(missing, ", "))
+        end
+        Menu.DuiDisplayMenuMissingLogged = true
+    elseif supported then
+        Menu.DuiDisplayMenuMissingLogged = false
+    end
+
+    return supported and not Menu.ShouldUseNuiDisplayMenu()
 end
 
 function Menu.DestroyDuiDisplayMenu()
