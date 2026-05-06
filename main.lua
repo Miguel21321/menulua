@@ -53,6 +53,14 @@ Menu.SpectatorEntries = {}
 Menu.SpectatorListAlpha = 0.0
 Menu.ClickableMenu = false
 Menu.DisplayMenu = false
+Menu.NuiDisplayMenuSupported = type(SendNUIMessage) == "function"
+    and type(SetNuiFocus) == "function"
+    and type(RegisterNUICallback) == "function"
+Menu.NuiDisplayMenuVisible = false
+Menu.NuiDisplayMenuFocused = false
+Menu.NuiDisplayMenuDirty = true
+Menu.NuiDisplayMenuLastSyncAt = 0
+Menu.NuiDisplayMenuSyncInterval = 250
 Menu.DisplayMenuHoverCategory = nil
 Menu.DisplayMenuHoverTab = nil
 Menu.DisplayMenuHoverItem = nil
@@ -199,6 +207,10 @@ function Menu.ApplyTheme(themeName)
 
     if Menu.Banner.enabled and Menu.Banner.imageUrl then
         Menu.LoadBannerTexture(Menu.Banner.imageUrl)
+    end
+
+    if Menu.MarkNuiDisplayMenuDirty then
+        Menu.MarkNuiDisplayMenuDirty(true)
     end
 end
 
@@ -513,9 +525,13 @@ local function SetInteractiveOverlayState(enable)
     Menu.InteractiveOverlayEnabled = desiredState
 end
 
+function Menu.ShouldUseNuiDisplayMenu()
+    return Menu.NuiDisplayMenuSupported == true
+end
+
 local function IsInteractiveOverlayActive()
     return (Menu.Visible and Menu.ClickableMenu)
-        or (Menu.Visible and Menu.DisplayMenu)
+        or (Menu.Visible and Menu.DisplayMenu and not Menu.ShouldUseNuiDisplayMenu())
         or Menu.EditorMode
         or Menu.KeybindsPositionMode
         or Menu.SpectatorPositionMode
@@ -4514,6 +4530,9 @@ function Menu.Render()
     end
 
     if not (Susano and Susano.BeginFrame) then
+        if Menu.SyncNuiDisplayMenu then
+            Menu.SyncNuiDisplayMenu(false)
+        end
         return
     end
 
@@ -4548,6 +4567,9 @@ function Menu.Render()
     end
 
     SetInteractiveOverlayState(IsInteractiveOverlayActive())
+    if Menu.SyncNuiDisplayMenu then
+        Menu.SyncNuiDisplayMenu(false)
+    end
 
     Susano.BeginFrame()
 
@@ -4566,7 +4588,9 @@ function Menu.Render()
 
     if Menu.Visible then
         if Menu.DisplayMenu then
-            drawDisplayMenuLate = true
+            if not Menu.ShouldUseNuiDisplayMenu() then
+                drawDisplayMenuLate = true
+            end
         else
             Menu.DrawBackground()
             Menu.DrawHeader()
@@ -4803,6 +4827,10 @@ function Menu.ApplySpecialToggleState(item)
         Menu.ShowBlossoms = item.value == true
     elseif item.name == "Show Spectator List" then
         Menu.ShowSpectatorList = item.value == true
+    end
+
+    if Menu.MarkNuiDisplayMenuDirty then
+        Menu.MarkNuiDisplayMenuDirty(true)
     end
 
     SetInteractiveOverlayState(IsInteractiveOverlayActive())
@@ -5150,6 +5178,9 @@ local function AdjustSelectorItem(item, direction, invokeCallback)
                 Menu.NotifyError(item.name or "Selector", error)
             end
         end
+        if Menu.MarkNuiDisplayMenuDirty then
+            Menu.MarkNuiDisplayMenuDirty(true)
+        end
         return
     end
 
@@ -5178,6 +5209,10 @@ local function AdjustSelectorItem(item, direction, invokeCallback)
         if not success and Menu.NotifyError then
             Menu.NotifyError(item.name or "Selector", error)
         end
+    end
+
+    if Menu.MarkNuiDisplayMenuDirty then
+        Menu.MarkNuiDisplayMenuDirty(true)
     end
 end
 if type(_G) == "table" then
@@ -5219,6 +5254,9 @@ local function SetSliderItemFromPercent(item, percent, isToggleSlider)
                     Menu.NotifyError(item.name or "Slider", error)
                 end
             end
+            if Menu.MarkNuiDisplayMenuDirty then
+                Menu.MarkNuiDisplayMenuDirty(false)
+            end
         end
         return
     end
@@ -5238,6 +5276,9 @@ local function SetSliderItemFromPercent(item, percent, isToggleSlider)
             if not success and Menu.NotifyError then
                 Menu.NotifyError(item.name or "Slider", error)
             end
+        end
+        if Menu.MarkNuiDisplayMenuDirty then
+            Menu.MarkNuiDisplayMenuDirty(false)
         end
     end
 end
@@ -5291,9 +5332,410 @@ local function TriggerPrimaryItemAction(item)
     elseif item.type == "selector" then
         AdjustSelectorItem(item, 1, true)
     end
+
+    if Menu.MarkNuiDisplayMenuDirty then
+        Menu.MarkNuiDisplayMenuDirty(true)
+    end
 end
 if type(_G) == "table" then
     _G.TriggerPrimaryItemAction = TriggerPrimaryItemAction
+end
+
+local function FindFirstNuiDisplayCategoryIndex()
+    if not Menu.Categories then
+        return nil
+    end
+
+    for index = 2, #Menu.Categories do
+        local category = Menu.Categories[index]
+        if category and category.hasTabs and category.tabs and #category.tabs > 0 then
+            return index
+        end
+    end
+
+    return nil
+end
+
+local function EnsureNuiDisplayMenuSelection()
+    if Menu.TopLevelTabs and not Menu.Categories then
+        Menu.UpdateCategoriesFromTopTab()
+    end
+
+    if not Menu.Categories or #Menu.Categories < 2 then
+        return nil, nil, nil
+    end
+
+    local categoryIndex = Menu.CurrentCategory
+    local category = categoryIndex and Menu.Categories[categoryIndex] or nil
+
+    if not category or not category.hasTabs or not category.tabs or #category.tabs == 0 then
+        categoryIndex = Menu.OpenedCategory
+        category = categoryIndex and Menu.Categories[categoryIndex] or nil
+    end
+
+    if not category or not category.hasTabs or not category.tabs or #category.tabs == 0 then
+        categoryIndex = FindFirstNuiDisplayCategoryIndex()
+        category = categoryIndex and Menu.Categories[categoryIndex] or nil
+    end
+
+    if not category then
+        return nil, nil, nil
+    end
+
+    Menu.CurrentCategory = categoryIndex
+    Menu.OpenedCategory = categoryIndex
+
+    if Menu.CurrentTab < 1 or Menu.CurrentTab > #category.tabs then
+        Menu.CurrentTab = 1
+    end
+
+    local currentTab = category.tabs[Menu.CurrentTab]
+    if currentTab and currentTab.items and #currentTab.items > 0 then
+        local currentItem = currentTab.items[Menu.CurrentItem]
+        if not currentItem or currentItem.isSeparator then
+            Menu.CurrentItem = findNextNonSeparator(currentTab.items, 0, 1)
+        end
+    else
+        Menu.CurrentItem = 1
+    end
+
+    return categoryIndex, Menu.CurrentTab, category
+end
+
+local function GetNuiDisplayItemValue(item)
+    if not item then
+        return nil
+    end
+
+    if item.type == "selector" or item.type == "toggle_selector" then
+        if item.options and item.selected and item.options[item.selected] ~= nil then
+            return item.options[item.selected]
+        end
+
+        return item.selected
+    end
+
+    if item.type == "toggle" and item.hasSlider then
+        return item.sliderValue
+    end
+
+    return item.value
+end
+
+local function SerializeNuiDisplayItem(item, itemIndex)
+    if not item then
+        return nil
+    end
+
+    if item.isSeparator then
+        return {
+            kind = "separator",
+            itemIndex = itemIndex,
+            label = item.separatorText or ""
+        }
+    end
+
+    local entry = {
+        kind = item.type or "action",
+        itemIndex = itemIndex,
+        label = item.name or ("Item " .. tostring(itemIndex)),
+        value = GetNuiDisplayItemValue(item),
+        enabled = item.value == true,
+        bindLabel = item.bindKeyName or (item.bindKey and Menu.GetKeyName(item.bindKey)) or nil
+    }
+
+    if item.type == "slider" then
+        entry.min = item.min or 0.0
+        entry.max = item.max or 100.0
+        entry.step = item.step or 1.0
+        entry.value = item.value or entry.min
+    elseif item.type == "toggle" and item.hasSlider then
+        entry.sliderMin = item.sliderMin or 0.0
+        entry.sliderMax = item.sliderMax or 100.0
+        entry.sliderStep = item.sliderStep or 0.1
+        entry.sliderValue = item.sliderValue or entry.sliderMin
+    elseif item.type == "selector" or item.type == "toggle_selector" then
+        entry.options = item.options or {}
+        entry.selected = item.selected or 1
+        entry.displayValue = entry.value
+    end
+
+    return entry
+end
+
+local function BuildNuiDisplayCategoryState(category, categoryIndex)
+    local tabs = {}
+
+    if category and category.tabs then
+        for tabIndex, tab in ipairs(category.tabs) do
+            local items = {}
+
+            if tab.items then
+                for itemIndex, item in ipairs(tab.items) do
+                    local serialized = SerializeNuiDisplayItem(item, itemIndex)
+                    if serialized then
+                        items[#items + 1] = serialized
+                    end
+                end
+            end
+
+            tabs[#tabs + 1] = {
+                tabIndex = tabIndex,
+                label = tab.name or ("Tab " .. tostring(tabIndex)),
+                items = items
+            }
+        end
+    end
+
+    return {
+        categoryIndex = categoryIndex,
+        label = category.name or ("Category " .. tostring(categoryIndex)),
+        icon = category.icon,
+        tabs = tabs
+    }
+end
+
+function Menu.BuildNuiDisplayMenuState()
+    local categoryIndex, currentTabIndex = EnsureNuiDisplayMenuSelection()
+    local categories = {}
+    local playerName = "Arcane"
+
+    if type(PlayerId) == "function" and type(GetPlayerName) == "function" then
+        local ok, name = pcall(function()
+            return GetPlayerName(PlayerId())
+        end)
+        if ok and type(name) == "string" and name ~= "" then
+            playerName = name
+        end
+    end
+
+    if Menu.Categories then
+        for index = 2, #Menu.Categories do
+            local category = Menu.Categories[index]
+            if category and category.hasTabs and category.tabs and #category.tabs > 0 then
+                categories[#categories + 1] = BuildNuiDisplayCategoryState(category, index)
+            end
+        end
+    end
+
+    local accent = Menu.Colors and Menu.Colors.SelectedBg or { r = 0, g = 221, b = 255 }
+
+    return {
+        action = "arcane:setState",
+        visible = true,
+        playerName = playerName,
+        currentCategoryIndex = categoryIndex or 2,
+        currentTabIndex = currentTabIndex or 1,
+        currentItemIndex = Menu.CurrentItem or 1,
+        themeName = Menu.CurrentTheme or "Blue",
+        accentColor = {
+            r = accent.r or 0,
+            g = accent.g or 221,
+            b = accent.b or 255
+        },
+        menuKeyLabel = Menu.SelectedKeyName or Menu.GetKeyName(Menu.SelectedKey or 0x31),
+        selectingKey = Menu.SelectingKey == true,
+        selectingBind = Menu.SelectingBind == true,
+        inputOpen = Menu.InputOpen == true,
+        categories = categories
+    }
+end
+
+function Menu.MarkNuiDisplayMenuDirty(force)
+    Menu.NuiDisplayMenuDirty = true
+    if force then
+        Menu.NuiDisplayMenuLastSyncAt = 0
+    end
+end
+
+function Menu.OpenNuiDisplayMenuCategory(categoryIndex)
+    if not categoryIndex or not Menu.Categories then
+        return
+    end
+
+    local category = Menu.Categories[categoryIndex]
+    if not category or not category.hasTabs or not category.tabs or #category.tabs == 0 then
+        return
+    end
+
+    Menu.CurrentCategory = categoryIndex
+    Menu.OpenedCategory = categoryIndex
+    Menu.CurrentTab = 1
+    Menu.ItemScrollOffset = 0
+    Menu.DisplayMenuItemScrollOffset = 0
+
+    if category.tabs[1] and category.tabs[1].items then
+        Menu.CurrentItem = findNextNonSeparator(category.tabs[1].items, 0, 1)
+    else
+        Menu.CurrentItem = 1
+    end
+
+    Menu.MarkNuiDisplayMenuDirty(true)
+end
+
+function Menu.OpenNuiDisplayMenuTab(tabIndex)
+    local categoryIndex, _, category = EnsureNuiDisplayMenuSelection()
+    if not categoryIndex or not category or not tabIndex then
+        return
+    end
+
+    if tabIndex < 1 or tabIndex > #category.tabs then
+        return
+    end
+
+    Menu.CurrentTab = tabIndex
+    Menu.ItemScrollOffset = 0
+    Menu.DisplayMenuItemScrollOffset = 0
+
+    local tab = category.tabs[tabIndex]
+    if tab and tab.items then
+        Menu.CurrentItem = findNextNonSeparator(tab.items, 0, 1)
+    else
+        Menu.CurrentItem = 1
+    end
+
+    Menu.MarkNuiDisplayMenuDirty(true)
+end
+
+local function ResolveNuiDisplayMenuItem(categoryIndex, tabIndex, itemIndex)
+    if categoryIndex then
+        Menu.OpenNuiDisplayMenuCategory(categoryIndex)
+    end
+
+    if tabIndex then
+        Menu.OpenNuiDisplayMenuTab(tabIndex)
+    end
+
+    local _, _, category = EnsureNuiDisplayMenuSelection()
+    if not category or not category.tabs then
+        return nil
+    end
+
+    local tab = category.tabs[Menu.CurrentTab]
+    if not tab or not tab.items then
+        return nil
+    end
+
+    local item = tab.items[itemIndex]
+    if item and not item.isSeparator then
+        Menu.CurrentItem = itemIndex
+    end
+
+    return item
+end
+
+function Menu.SyncNuiDisplayMenu(force)
+    if not Menu.ShouldUseNuiDisplayMenu() then
+        return
+    end
+
+    local visible = Menu.Visible and Menu.DisplayMenu
+    local wantsFocus = visible and not Menu.InputOpen and not Menu.SelectingKey and not Menu.SelectingBind
+
+    if Menu.NuiDisplayMenuFocused ~= wantsFocus then
+        pcall(SetNuiFocus, wantsFocus, wantsFocus)
+        if type(SetNuiFocusKeepInput) == "function" then
+            pcall(SetNuiFocusKeepInput, false)
+        end
+        Menu.NuiDisplayMenuFocused = wantsFocus
+    end
+
+    if not visible then
+        if Menu.NuiDisplayMenuVisible then
+            SendNUIMessage({
+                action = "arcane:setState",
+                visible = false
+            })
+            Menu.NuiDisplayMenuVisible = false
+        end
+        return
+    end
+
+    local now = GetGameTimer and GetGameTimer() or 0
+    if force or Menu.NuiDisplayMenuDirty or not Menu.NuiDisplayMenuVisible or (now - (Menu.NuiDisplayMenuLastSyncAt or 0)) >= (Menu.NuiDisplayMenuSyncInterval or 250) then
+        local payload = Menu.BuildNuiDisplayMenuState()
+        payload.visible = true
+        SendNUIMessage(payload)
+        Menu.NuiDisplayMenuVisible = true
+        Menu.NuiDisplayMenuDirty = false
+        Menu.NuiDisplayMenuLastSyncAt = now
+    end
+end
+
+if Menu.ShouldUseNuiDisplayMenu() then
+    RegisterNUICallback("arcaneReady", function(_, cb)
+        Menu.MarkNuiDisplayMenuDirty(true)
+        Menu.SyncNuiDisplayMenu(true)
+        cb({ ok = true })
+    end)
+
+    RegisterNUICallback("arcaneClose", function(_, cb)
+        Menu.Visible = false
+        Menu.SyncNuiDisplayMenu(true)
+        cb({ ok = true })
+    end)
+
+    RegisterNUICallback("arcaneSelectCategory", function(data, cb)
+        Menu.OpenNuiDisplayMenuCategory(tonumber(data and data.categoryIndex))
+        Menu.SyncNuiDisplayMenu(true)
+        cb({ ok = true })
+    end)
+
+    RegisterNUICallback("arcaneSelectTab", function(data, cb)
+        Menu.OpenNuiDisplayMenuTab(tonumber(data and data.tabIndex))
+        Menu.SyncNuiDisplayMenu(true)
+        cb({ ok = true })
+    end)
+
+    RegisterNUICallback("arcaneItemPrimary", function(data, cb)
+        local item = ResolveNuiDisplayMenuItem(
+            tonumber(data and data.categoryIndex),
+            tonumber(data and data.tabIndex),
+            tonumber(data and data.itemIndex)
+        )
+
+        if item then
+            TriggerPrimaryItemAction(item)
+        end
+
+        Menu.MarkNuiDisplayMenuDirty(true)
+        Menu.SyncNuiDisplayMenu(true)
+        cb({ ok = item ~= nil })
+    end)
+
+    RegisterNUICallback("arcaneItemAdjust", function(data, cb)
+        local item = ResolveNuiDisplayMenuItem(
+            tonumber(data and data.categoryIndex),
+            tonumber(data and data.tabIndex),
+            tonumber(data and data.itemIndex)
+        )
+
+        local direction = tonumber(data and data.direction) or 0
+        if item and (item.type == "selector" or item.type == "toggle_selector") then
+            AdjustSelectorItem(item, direction < 0 and -1 or 1, true)
+        end
+
+        Menu.MarkNuiDisplayMenuDirty(true)
+        Menu.SyncNuiDisplayMenu(true)
+        cb({ ok = item ~= nil })
+    end)
+
+    RegisterNUICallback("arcaneItemSlider", function(data, cb)
+        local item = ResolveNuiDisplayMenuItem(
+            tonumber(data and data.categoryIndex),
+            tonumber(data and data.tabIndex),
+            tonumber(data and data.itemIndex)
+        )
+
+        local percent = tonumber(data and data.percent) or 0.0
+        if item and (item.type == "slider" or (item.type == "toggle" and item.hasSlider)) then
+            SetSliderItemFromPercent(item, percent, item.type == "toggle" and item.hasSlider)
+        end
+
+        Menu.MarkNuiDisplayMenuDirty(false)
+        Menu.SyncNuiDisplayMenu(false)
+        cb({ ok = item ~= nil })
+    end)
 end
 
 local function GetMenuBoundsForMouse()
@@ -5725,7 +6167,13 @@ function Menu.HandleInput()
             local wasVisible = Menu.Visible
             Menu.Visible = not Menu.Visible
             Menu.DisplayMenuCurrentMap = nil
+            if Menu.MarkNuiDisplayMenuDirty then
+                Menu.MarkNuiDisplayMenuDirty(true)
+            end
             SetInteractiveOverlayState(IsInteractiveOverlayActive())
+            if Menu.SyncNuiDisplayMenu then
+                Menu.SyncNuiDisplayMenu(true)
+            end
 
             if wasVisible and not Menu.Visible and not Menu.ShowKeybinds and not Menu.ShowSpectatorList then
                 if Susano and Susano.ResetFrame then
@@ -5736,6 +6184,13 @@ function Menu.HandleInput()
     end
 
     if not Menu.Visible then
+        return
+    end
+
+    if Menu.DisplayMenu and Menu.ShouldUseNuiDisplayMenu() then
+        if Menu.SyncNuiDisplayMenu then
+            Menu.SyncNuiDisplayMenu(false)
+        end
         return
     end
 
