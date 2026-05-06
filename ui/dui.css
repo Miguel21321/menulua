@@ -1,0 +1,530 @@
+:root {
+  --accent-rgb: 0, 221, 255;
+  --accent: rgb(var(--accent-rgb));
+  --accent-soft: rgba(var(--accent-rgb), 0.18);
+  --accent-line: rgba(var(--accent-rgb), 0.4);
+  --panel-dark: rgba(10, 13, 20, 0.94);
+  --panel-mid: rgba(18, 22, 31, 0.96);
+  --panel-soft: rgba(255, 255, 255, 0.035);
+  --line: rgba(255, 255, 255, 0.08);
+  --line-soft: rgba(255, 255, 255, 0.05);
+  --text: rgba(244, 247, 252, 0.97);
+  --muted: rgba(155, 164, 181, 0.82);
+  --shadow: 0 24px 90px rgba(0, 0, 0, 0.36);
+  --font-ui: "Bahnschrift", "Segoe UI Variable Text", "Segoe UI", sans-serif;
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background: transparent;
+  font-family: var(--font-ui);
+  color: var(--text);
+  user-select: none;
+}
+
+body {
+  pointer-events: auto;
+}
+
+button,
+input {
+  font: inherit;
+}
+
+.app {
+  position: fixed;
+  inset: 0;
+  opacity: 1;
+  transition: opacity 140ms ease;
+}
+
+.app.is-hidden {
+  opacity: 0;
+}
+
+.root {
+  position: absolute;
+  inset: 0;
+}
+
+.dui-backdrop {
+  position: absolute;
+  inset: 0;
+  background:
+    radial-gradient(circle at 14% 18%, rgba(var(--accent-rgb), 0.16), transparent 24%),
+    radial-gradient(circle at 78% 14%, rgba(255, 255, 255, 0.06), transparent 20%),
+    linear-gradient(180deg, rgba(7, 10, 18, 0.48), rgba(4, 6, 10, 0.74));
+}
+
+.dui-panel-shadow {
+  position: absolute;
+  border-radius: 30px;
+  background: rgba(0, 0, 0, 0.34);
+  filter: blur(14px);
+}
+
+.dui-panel {
+  position: absolute;
+  overflow: hidden;
+  border-radius: 28px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.05), transparent 10%),
+    linear-gradient(160deg, rgba(12, 15, 22, 0.98), rgba(7, 10, 16, 0.99));
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  box-shadow: var(--shadow);
+}
+
+.dui-sidebar {
+  position: absolute;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 14%),
+    linear-gradient(180deg, rgba(18, 21, 29, 0.98), rgba(12, 15, 22, 0.98));
+  border-right: 1px solid rgba(255, 255, 255, 0.06);
+}
+
+.dui-main {
+  position: absolute;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.02), transparent 10%),
+    linear-gradient(180deg, rgba(10, 13, 20, 0.88), rgba(9, 11, 18, 0.94));
+}
+
+.dui-top-band {
+  position: absolute;
+  border-radius: 18px;
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.03));
+  border: 1px solid rgba(var(--accent-rgb), 0.14);
+}
+
+.dui-footer {
+  position: absolute;
+  background: rgba(10, 12, 18, 0.96);
+  border-top: 1px solid rgba(255, 255, 255, 0.05);
+}
+
+.dui-brand {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 14px;
+}
+
+.dui-brand-mark {
+  width: 44px;
+  height: 44px;
+  display: grid;
+  place-items: center;
+  border-radius: 14px;
+  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.28), rgba(var(--accent-rgb), 0.08));
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
+  color: var(--accent);
+  font-size: 22px;
+  font-weight: 800;
+  letter-spacing: 0.08em;
+}
+
+.dui-brand-title {
+  font-size: 22px;
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.dui-brand-subtitle {
+  color: var(--muted);
+  font-size: 11px;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+}
+
+.dui-search {
+  position: absolute;
+  padding: 12px 14px;
+  border-radius: 14px;
+  background: rgba(22, 26, 36, 0.94);
+  border: 1px solid rgba(255, 255, 255, 0.07);
+}
+
+.dui-search-title {
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+}
+
+.dui-search-subtitle {
+  margin-top: 12px;
+  color: var(--text);
+  font-size: 12px;
+}
+
+.dui-pill {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0 12px;
+  height: 28px;
+  border-radius: 999px;
+  background: rgba(36, 40, 51, 0.96);
+  border: 1px solid rgba(255, 255, 255, 0.06);
+  color: rgba(230, 234, 242, 0.95);
+  font-size: 10px;
+  font-weight: 700;
+  letter-spacing: 0.08em;
+  text-transform: uppercase;
+  white-space: nowrap;
+}
+
+.dui-pill.is-accent {
+  background: rgba(var(--accent-rgb), 0.18);
+  border-color: rgba(var(--accent-rgb), 0.28);
+}
+
+.dui-category {
+  position: absolute;
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  padding: 0 12px;
+  border-radius: 14px;
+  color: rgba(197, 203, 216, 0.9);
+}
+
+.dui-category.is-active {
+  background:
+    linear-gradient(90deg, rgba(var(--accent-rgb), 0.16), transparent 72%),
+    rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(var(--accent-rgb), 0.18);
+  color: var(--text);
+}
+
+.dui-category.is-hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.dui-category-mono {
+  width: 30px;
+  height: 30px;
+  display: grid;
+  place-items: center;
+  border-radius: 10px;
+  background: rgba(255, 255, 255, 0.04);
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  color: var(--accent);
+  font-size: 11px;
+  font-weight: 700;
+  letter-spacing: 0.12em;
+}
+
+.dui-category-main {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.dui-category-label {
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dui-category-meta {
+  color: rgba(126, 134, 150, 0.95);
+  font-size: 10px;
+  letter-spacing: 0.08em;
+  text-transform: lowercase;
+}
+
+.dui-header-title {
+  position: absolute;
+  color: rgba(245, 247, 251, 0.98);
+  font-size: 28px;
+  font-weight: 700;
+}
+
+.dui-header-subtitle {
+  position: absolute;
+  color: rgba(150, 157, 172, 0.92);
+  font-size: 12px;
+}
+
+.dui-tab {
+  position: absolute;
+  display: grid;
+  place-items: center;
+  border-radius: 13px;
+  color: rgba(186, 191, 203, 0.92);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dui-tab.is-active {
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.05));
+  border: 1px solid rgba(var(--accent-rgb), 0.22);
+  color: rgba(246, 249, 252, 0.98);
+}
+
+.dui-tab.is-hover:not(.is-active) {
+  background: rgba(255, 255, 255, 0.045);
+}
+
+.dui-hero-card {
+  position: absolute;
+  border-radius: 18px;
+  background: rgba(16, 19, 27, 0.68);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.dui-hero-title {
+  position: absolute;
+  color: rgba(244, 247, 252, 0.98);
+  font-size: 18px;
+  font-weight: 700;
+}
+
+.dui-hero-subtitle {
+  position: absolute;
+  color: rgba(135, 143, 159, 0.94);
+  font-size: 11px;
+}
+
+.dui-section {
+  position: absolute;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 10%),
+    linear-gradient(180deg, rgba(20, 23, 32, 0.98), rgba(14, 18, 27, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.dui-section-line {
+  position: absolute;
+  left: 1px;
+  top: 1px;
+  height: 3px;
+  width: calc(100% - 2px);
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.95), rgba(var(--accent-rgb), 0.22));
+}
+
+.dui-section-title {
+  position: absolute;
+  color: rgba(220, 225, 234, 0.98);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.dui-section-count {
+  position: absolute;
+}
+
+.dui-row {
+  position: absolute;
+  border-radius: 12px;
+  background: rgba(255, 255, 255, 0.025);
+  border: 1px solid rgba(255, 255, 255, 0.03);
+}
+
+.dui-row.is-hover {
+  background: rgba(255, 255, 255, 0.05);
+}
+
+.dui-row.is-selected {
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.12), rgba(255, 255, 255, 0.02));
+  border-color: rgba(var(--accent-rgb), 0.12);
+}
+
+.dui-row-accent {
+  position: absolute;
+  left: 0;
+  top: 6px;
+  bottom: 6px;
+  width: 3px;
+  border-radius: 2px;
+  background: rgba(var(--accent-rgb), 0.96);
+}
+
+.dui-row-label {
+  position: absolute;
+  color: rgba(238, 241, 247, 0.98);
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.dui-bind {
+  position: absolute;
+}
+
+.dui-toggle {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(42, 46, 58, 0.96);
+  border: 1px solid rgba(82, 88, 104, 0.9);
+}
+
+.dui-toggle.is-on {
+  background: rgba(var(--accent-rgb), 0.32);
+  border-color: rgba(var(--accent-rgb), 0.4);
+}
+
+.dui-toggle-knob {
+  position: absolute;
+  top: 2px;
+  left: 2px;
+  border-radius: 50%;
+  background: rgba(245, 247, 252, 1);
+  box-shadow: 0 4px 10px rgba(0, 0, 0, 0.24);
+}
+
+.dui-slider-track {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(55, 58, 72, 0.98);
+}
+
+.dui-slider-fill {
+  position: absolute;
+  left: 0;
+  top: 0;
+  bottom: 0;
+  border-radius: 999px;
+  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.98), rgba(var(--accent-rgb), 0.55));
+}
+
+.dui-slider-knob {
+  position: absolute;
+  width: 10px;
+  height: 10px;
+  margin-left: -5px;
+  margin-top: -4px;
+  border-radius: 50%;
+  background: rgba(245, 247, 252, 1);
+}
+
+.dui-selector {
+  position: absolute;
+  border-radius: 10px;
+  background: rgba(28, 31, 40, 0.98);
+  border: 1px solid rgba(70, 75, 91, 0.88);
+}
+
+.dui-selector-arrow,
+.dui-selector-value,
+.dui-button-label {
+  position: absolute;
+  display: grid;
+  place-items: center;
+}
+
+.dui-selector-arrow {
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dui-selector-value {
+  color: rgba(239, 242, 247, 0.98);
+  font-size: 12px;
+  font-weight: 600;
+}
+
+.dui-action {
+  position: absolute;
+  border-radius: 10px;
+  background: rgba(var(--accent-rgb), 0.2);
+  border: 1px solid rgba(var(--accent-rgb), 0.3);
+}
+
+.dui-button-label {
+  color: rgba(244, 247, 252, 0.98);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dui-summary-card {
+  position: absolute;
+  border-radius: 18px;
+  background:
+    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 10%),
+    linear-gradient(180deg, rgba(18, 21, 29, 0.98), rgba(14, 18, 27, 0.98));
+  border: 1px solid rgba(255, 255, 255, 0.07);
+  overflow: hidden;
+}
+
+.dui-summary-title {
+  position: absolute;
+  color: rgba(240, 244, 250, 0.98);
+  font-size: 17px;
+  font-weight: 700;
+}
+
+.dui-summary-subtitle {
+  position: absolute;
+  color: rgba(129, 136, 152, 0.92);
+  font-size: 11px;
+}
+
+.dui-summary-label {
+  position: absolute;
+  color: rgba(124, 131, 147, 0.94);
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.08em;
+}
+
+.dui-summary-value {
+  position: absolute;
+  color: rgba(235, 239, 245, 0.98);
+  font-size: 15px;
+  font-weight: 600;
+}
+
+.dui-help-box {
+  position: absolute;
+  border-radius: 14px;
+  background: rgba(255, 255, 255, 0.03);
+  border: 1px solid rgba(255, 255, 255, 0.04);
+}
+
+.dui-help-title {
+  position: absolute;
+  color: var(--accent);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.dui-help-line {
+  position: absolute;
+  color: rgba(209, 214, 223, 0.96);
+  font-size: 11px;
+}
+
+.dui-footer-left,
+.dui-footer-center,
+.dui-footer-right {
+  position: absolute;
+  color: rgba(125, 132, 147, 0.94);
+  font-size: 11px;
+}
+
+.dui-footer-right {
+  color: rgba(150, 157, 172, 0.94);
+}
+
+.dui-scroll-track {
+  position: absolute;
+  border-radius: 999px;
+  background: rgba(42, 46, 57, 0.9);
+}
+
+.dui-scroll-thumb {
+  position: absolute;
+  border-radius: 999px;
+  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.98), rgba(var(--accent-rgb), 0.5));
+}
