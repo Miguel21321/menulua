@@ -4118,6 +4118,7 @@ end
 local SDM_EnsureOpenedCategory
 local SDM_ItemHeight
 local SDM_BuildSections
+local SDM_GetCategoryMonogram
 
 local function SDM_GetSectionColumnCount(sections, areaW, scale)
     if not sections or #sections == 0 then
@@ -4660,7 +4661,7 @@ local function SDM_CopyRect(rect)
     }
 end
 
-local function SDM_GetCategoryMonogram(label)
+SDM_GetCategoryMonogram = function(label)
     local cleaned = tostring(label or ""):gsub("^%s+", ""):gsub("%s+$", "")
     if cleaned == "" then
         return "AR"
@@ -4675,6 +4676,10 @@ local function SDM_GetCategoryMonogram(label)
     end
 
     return string.upper(table.concat(letters))
+end
+
+if type(_G) == "table" then
+    _G.SDM_GetCategoryMonogram = SDM_GetCategoryMonogram
 end
 
 local function SDM_SerializeRow(row)
