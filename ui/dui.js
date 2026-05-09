@@ -47,11 +47,9 @@ function renderToggle(rect, enabled, parentRect) {
   if (!rect) {
     return "";
   }
-  const knobSize = Math.max(10, (rect.h || 0) - 4);
-  const knobLeft = enabled ? ((rect.w || 0) - knobSize - 2) : 2;
   return `
     <div class="dui-toggle ${enabled ? "is-on" : ""}" style="${relRectStyle(rect, parentRect)}">
-      <div class="dui-toggle-knob" style="left:${px(knobLeft)};width:${px(knobSize)};height:${px(knobSize)};"></div>
+      <div class="dui-toggle-mark"></div>
     </div>
   `;
 }
@@ -153,10 +151,10 @@ function renderSection(section) {
 
   const countWidth = Math.max(32, String(section.count || 0).length * 9 + 18);
   return `
+    <div class="dui-section-label" style="left:${px(section.rect.x)};top:${px((section.rect.y || 0) - 18)};">${escapeHtml(section.title)}</div>
     <section class="dui-section" style="${rectStyle(section.rect)}">
       <div class="dui-section-line"></div>
-      <div class="dui-section-title" style="left:18px;top:16px;">${escapeHtml(section.title)}</div>
-      ${renderPill(section.count || 0, "dui-section-count", `right:14px;top:11px;width:${px(countWidth)};`)}
+      ${renderPill(section.count || 0, "dui-section-count", `right:12px;top:9px;width:${px(countWidth)};`)}
       ${(section.rows || []).map((row) => renderRow(row, section.rect)).join("")}
     </section>
   `;
@@ -184,10 +182,10 @@ function renderSummary(summary) {
     <section class="dui-summary-card" style="${rectStyle(summary.rect)}">
       <div class="dui-section-line"></div>
       <div class="dui-summary-title" style="left:18px;top:16px;">Overview</div>
-      <div class="dui-summary-subtitle" style="left:18px;top:38px;">Shortcuts and state for this module.</div>
+      <div class="dui-summary-subtitle" style="left:18px;top:38px;">Current module state.</div>
       ${infoLines}
       <div class="dui-help-box" style="left:18px;top:${px(helpBase)};width:${px((summary.rect.w || 0) - 36)};height:84px;">
-        <div class="dui-help-title" style="left:14px;top:14px;">Controls</div>
+        <div class="dui-help-title" style="left:14px;top:14px;">State</div>
         ${helpLines}
       </div>
     </section>
@@ -236,43 +234,19 @@ function renderState(data) {
   const padding = Number(layout.padding) || 18;
   const footerHeight = Number(layout.footerHeight) || 34;
   const footerY = panel.y + panel.h - footerHeight;
-  const bandRect = {
-    x: mainX + padding,
-    y: panel.y + 18,
-    w: Math.max(120, mainWidth - (padding * 2)),
-    h: 72
-  };
   const brandRect = {
     x: panel.x + padding,
-    y: panel.y + 20,
+    y: panel.y + 18,
     w: sidebarWidth - (padding * 2),
     h: 48
   };
-  const headerTitleX = mainX + padding;
-  const keyText = data.header?.keyText || "";
-  const themeText = data.header?.themeText || "";
-  const keyWidth = Math.max(92, keyText.length * 7 + 22);
-  const themeWidth = Math.max(92, themeText.length * 7 + 22);
-  const keyPillRect = {
-    x: panel.x + panel.w - padding - keyWidth,
-    y: panel.y + 20,
-    w: keyWidth,
-    h: 28
-  };
-  const themePillRect = {
-    x: keyPillRect.x - 10 - themeWidth,
-    y: panel.y + 20,
-    w: themeWidth,
-    h: 28
-  };
   const searchPillWidth = Math.max(92, (data.sidebarBadge?.pill || "").length * 7 + 18);
   const searchPillRect = {
-    x: searchRect.x + searchRect.w - searchPillWidth - 16,
-    y: searchRect.y + 12,
+    x: searchRect.x + searchRect.w - searchPillWidth - 10,
+    y: searchRect.y + 8,
     w: searchPillWidth,
-    h: 24
+    h: 22
   };
-  const contentArea = layout.contentArea || heroRect;
   const footerLeftWidth = Math.max(160, (data.footer?.left || "").length * 7);
   const footerCenterWidth = Math.max(170, (data.footer?.center || "").length * 7);
   const footerRightWidth = Math.max(70, (data.footer?.right || "").length * 7);
@@ -283,7 +257,6 @@ function renderState(data) {
     <div class="dui-panel" style="${rectStyle(panel)}"></div>
     <div class="dui-sidebar" style="${rectStyle({ x: panel.x, y: panel.y, w: sidebarWidth, h: panel.h })}"></div>
     <div class="dui-main" style="${rectStyle({ x: mainX, y: panel.y, w: mainWidth, h: panel.h })}"></div>
-    <div class="dui-top-band" style="${rectStyle(bandRect)}"></div>
     <div class="dui-footer" style="${rectStyle({ x: panel.x, y: footerY, w: panel.w, h: footerHeight })}"></div>
 
     <div class="dui-brand" style="${rectStyle(brandRect)}">
@@ -295,23 +268,14 @@ function renderState(data) {
     </div>
 
     <div class="dui-search" style="${rectStyle(searchRect)}">
-      <div class="dui-search-title">${escapeHtml(data.sidebarBadge?.title || "")}</div>
-      ${renderPill(data.sidebarBadge?.pill || "", "", rectStyle(searchPillRect))}
+      <div class="dui-search-icon"></div>
+      ${renderPill(data.sidebarBadge?.pill || "", "", relRectStyle(searchPillRect, searchRect))}
       <div class="dui-search-subtitle">${escapeHtml(data.sidebarBadge?.subtitle || "")}</div>
     </div>
 
     ${(data.map?.categoryButtons || []).map(renderCategory).join("")}
 
-    <div class="dui-header-title" style="left:${px(headerTitleX)};top:${px(panel.y + 18)};">${escapeHtml(data.header?.title || "Arcane")}</div>
-    <div class="dui-header-subtitle" style="left:${px(headerTitleX)};top:${px(panel.y + 48)};">${escapeHtml(data.header?.subtitle || "")}</div>
-    ${renderPill(themeText, "is-accent", rectStyle(themePillRect))}
-    ${renderPill(keyText, "", rectStyle(keyPillRect))}
-
     ${(data.map?.tabButtons || []).map(renderTab).join("")}
-
-    <div class="dui-hero-card" style="${rectStyle({ x: contentArea.x, y: contentArea.y, w: contentArea.w, h: Math.max(58, heroRect.h || 58) })}"></div>
-    <div class="dui-hero-title" style="left:${px(heroRect.x + 16)};top:${px(heroRect.y + 12)};">${escapeHtml(data.hero?.title || "")}</div>
-    <div class="dui-hero-subtitle" style="left:${px(heroRect.x + 16)};top:${px(heroRect.y + 33)};">${escapeHtml(data.hero?.subtitle || "")}</div>
 
     ${(data.map?.sections || []).map(renderSection).join("")}
     ${renderSummary(data.map?.summary)}
