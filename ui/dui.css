@@ -1,596 +1,437 @@
-:root {
-  --accent-rgb: 0, 221, 255;
-  --accent: rgb(var(--accent-rgb));
-  --accent-soft: rgba(var(--accent-rgb), 0.18);
-  --accent-line: rgba(var(--accent-rgb), 0.4);
-  --panel-dark: rgba(12, 12, 17, 0.96);
-  --panel-mid: rgba(27, 27, 33, 0.96);
-  --panel-soft: rgba(255, 255, 255, 0.032);
-  --line: rgba(255, 255, 255, 0.08);
-  --line-soft: rgba(255, 255, 255, 0.05);
-  --text: rgba(244, 247, 252, 0.97);
-  --muted: rgba(155, 164, 181, 0.82);
-  --shadow: 0 26px 82px rgba(0, 0, 0, 0.42);
-  --font-ui: "Bahnschrift", "Segoe UI Variable Text", "Segoe UI", sans-serif;
-}
-
-* {
-  box-sizing: border-box;
-}
-
-html,
-body {
-  margin: 0;
-  width: 100%;
-  height: 100%;
-  overflow: hidden;
-  background: transparent;
-  font-family: var(--font-ui);
-  color: var(--text);
-  user-select: none;
-}
-
-body {
-  pointer-events: auto;
-}
-
-button,
-input {
-  font: inherit;
-}
-
-.app {
-  position: fixed;
-  inset: 0;
-  opacity: 1;
-  transition: opacity 170ms ease;
-}
-
-.app.is-hidden {
-  opacity: 0;
-}
-
-.root {
-  position: absolute;
-  inset: 0;
-}
-
-.dui-backdrop {
-  position: absolute;
-  inset: 0;
-  background: linear-gradient(180deg, rgba(5, 6, 10, 0.34), rgba(5, 6, 10, 0.62));
-  backdrop-filter: blur(4px);
-}
-
-.dui-panel-shadow {
-  position: absolute;
-  border-radius: 12px;
-  background: rgba(0, 0, 0, 0.34);
-  filter: blur(18px);
-}
-
-.dui-panel {
-  position: absolute;
-  overflow: hidden;
-  border-radius: 8px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.028), transparent 16%),
-    linear-gradient(180deg, rgba(13, 13, 18, 0.99), rgba(9, 10, 14, 0.99));
-  border: 1px solid rgba(255, 255, 255, 0.08);
-  box-shadow: var(--shadow);
-  animation: dui-enter 190ms cubic-bezier(0.16, 1, 0.3, 1);
-}
-
-.dui-sidebar {
-  position: absolute;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.026), transparent 18%),
-    linear-gradient(180deg, rgba(21, 21, 27, 0.99), rgba(15, 15, 20, 0.99));
-  border-right: 1px solid rgba(255, 255, 255, 0.06);
-}
-
-.dui-main {
-  position: absolute;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.018), transparent 9%),
-    linear-gradient(180deg, rgba(17, 17, 23, 0.94), rgba(10, 10, 15, 0.96));
-}
-
-.dui-top-band {
-  position: absolute;
-  border-radius: 18px;
-  background: linear-gradient(135deg, rgba(var(--accent-rgb), 0.16), rgba(var(--accent-rgb), 0.03));
-  border: 1px solid rgba(var(--accent-rgb), 0.14);
-}
-
-.dui-footer {
-  position: absolute;
-  background: rgba(10, 12, 18, 0.96);
-  border-top: 1px solid rgba(255, 255, 255, 0.05);
-}
-
-.dui-brand {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-}
-
-.dui-brand-mark {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 999px;
-  background: rgba(var(--accent-rgb), 0.16);
-  border: 5px solid rgba(244, 247, 252, 0.96);
-  color: transparent;
-  font-size: 0;
-  font-weight: 800;
-}
-
-.dui-brand-title {
-  font-size: 28px;
-  font-weight: 700;
-  letter-spacing: 0;
-}
-
-.dui-brand-subtitle {
-  color: var(--muted);
-  font-size: 11px;
-  letter-spacing: 0.14em;
-  text-transform: uppercase;
-}
-
-.dui-search {
-  position: absolute;
-  padding: 0;
-  border-radius: 8px;
-  background: rgba(35, 35, 41, 0.92);
-  border: 1px solid rgba(255, 255, 255, 0.07);
-}
-
-.dui-search-icon {
-  position: absolute;
-  left: 13px;
-  top: 12px;
-  width: 9px;
-  height: 9px;
-  border-radius: 999px;
-  border: 2px solid rgba(168, 171, 184, 0.92);
-}
-
-.dui-search-icon::after {
-  content: "";
-  position: absolute;
-  width: 7px;
-  height: 2px;
-  right: -6px;
-  bottom: -4px;
-  border-radius: 999px;
-  background: rgba(168, 171, 184, 0.92);
-  transform: rotate(45deg);
-}
-
-.dui-search-title {
-  color: var(--accent);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-}
-
-.dui-search-subtitle {
-  position: absolute;
-  left: 34px;
-  top: 10px;
-  color: rgba(178, 181, 194, 0.92);
-  font-size: 13px;
-}
-
-.dui-pill {
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0 12px;
-  height: 28px;
-  border-radius: 999px;
-  background: rgba(36, 40, 51, 0.96);
-  border: 1px solid rgba(255, 255, 255, 0.06);
-  color: rgba(230, 234, 242, 0.95);
-  font-size: 10px;
-  font-weight: 700;
-  letter-spacing: 0.08em;
-  text-transform: uppercase;
-  white-space: nowrap;
-}
-
-.dui-pill.is-accent {
-  background: rgba(var(--accent-rgb), 0.18);
-  border-color: rgba(var(--accent-rgb), 0.28);
-}
-
-.dui-search .dui-pill {
-  position: absolute;
-}
-
-.dui-category {
-  position: absolute;
-  display: flex;
-  align-items: center;
-  gap: 14px;
-  padding: 0 16px;
-  border-radius: 5px;
-  color: rgba(197, 203, 216, 0.9);
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.dui-category.is-active {
-  background:
-    linear-gradient(90deg, rgba(var(--accent-rgb), 0.22), transparent 86%),
-    rgba(255, 255, 255, 0.055);
-  border: 0;
-  color: var(--text);
-}
-
-.dui-category.is-hover:not(.is-active) {
-  background: rgba(255, 255, 255, 0.045);
-}
-
-.dui-category-mono {
-  width: 28px;
-  height: 28px;
-  display: grid;
-  place-items: center;
-  border-radius: 7px;
-  background: transparent;
-  border: 0;
-  color: rgba(224, 226, 235, 0.96);
-  font-size: 11px;
-  font-weight: 700;
-  letter-spacing: 0.12em;
-}
-
-.dui-category-main {
-  display: flex;
-  flex-direction: column;
-  gap: 2px;
-}
-
-.dui-category-label {
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.dui-category-meta {
-  color: rgba(126, 134, 150, 0.95);
-  font-size: 10px;
-  letter-spacing: 0.08em;
-  text-transform: lowercase;
-}
-
-.dui-header-title {
-  position: absolute;
-  color: rgba(245, 247, 251, 0.98);
-  font-size: 28px;
-  font-weight: 700;
-}
-
-.dui-header-subtitle {
-  position: absolute;
-  color: rgba(150, 157, 172, 0.92);
-  font-size: 12px;
-}
-
-.dui-tab {
-  position: absolute;
-  display: grid;
-  place-items: center;
-  border-radius: 4px;
-  color: rgba(186, 191, 203, 0.92);
-  font-size: 13px;
-  font-weight: 600;
-  transition: background 120ms ease, color 120ms ease;
-}
-
-.dui-tab.is-active {
-  background: rgba(var(--accent-rgb), 0.18);
-  border-bottom: 2px solid rgba(var(--accent-rgb), 0.96);
-  color: rgba(246, 249, 252, 0.98);
-}
-
-.dui-tab.is-hover:not(.is-active) {
-  background: rgba(255, 255, 255, 0.045);
-}
-
-.dui-hero-card {
-  position: absolute;
-  border-radius: 18px;
-  background: rgba(16, 19, 27, 0.68);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.dui-hero-title {
-  position: absolute;
-  color: rgba(244, 247, 252, 0.98);
-  font-size: 18px;
-  font-weight: 700;
-}
-
-.dui-hero-subtitle {
-  position: absolute;
-  color: rgba(135, 143, 159, 0.94);
-  font-size: 11px;
-}
-
-.dui-section {
-  position: absolute;
-  border-radius: 7px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.026), transparent 10%),
-    linear-gradient(180deg, rgba(27, 27, 33, 0.98), rgba(23, 23, 29, 0.98));
-  border: 1px solid rgba(255, 255, 255, 0.075);
-  overflow: hidden;
-  animation: dui-card-in 170ms ease both;
-}
-
-.dui-section-line {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  width: 2px;
-  background: rgba(var(--accent-rgb), 0.86);
-}
-
-.dui-section-label {
-  position: absolute;
-  color: rgba(145, 148, 164, 0.96);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.dui-section-title {
-  position: absolute;
-  color: rgba(220, 225, 234, 0.98);
-  font-size: 13px;
-  font-weight: 700;
-}
-
-.dui-section-count {
-  position: absolute;
-}
-
-.dui-row {
-  position: absolute;
-  border-radius: 6px;
-  background: rgba(255, 255, 255, 0.022);
-  border: 1px solid rgba(255, 255, 255, 0.025);
-  transition: background 110ms ease, border-color 110ms ease;
-}
-
-.dui-row.is-hover {
-  background: rgba(255, 255, 255, 0.05);
-}
-
-.dui-row.is-selected {
-  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.13), rgba(255, 255, 255, 0.02));
-  border-color: rgba(var(--accent-rgb), 0.12);
-}
-
-.dui-row-accent {
-  position: absolute;
-  left: 0;
-  top: 6px;
-  bottom: 6px;
-  width: 3px;
-  border-radius: 2px;
-  background: rgba(var(--accent-rgb), 0.96);
-}
-
-.dui-row-label {
-  position: absolute;
-  color: rgba(238, 241, 247, 0.98);
-  font-size: 13px;
-  font-weight: 600;
-}
-
-.dui-bind {
-  position: absolute;
-}
-
-.dui-toggle {
-  position: absolute;
-  border-radius: 5px;
-  background: rgba(38, 39, 47, 0.96);
-  border: 1px solid rgba(70, 72, 85, 0.9);
-  display: grid;
-  place-items: center;
-  transition: background 120ms ease, border-color 120ms ease;
-}
-
-.dui-toggle.is-on {
-  background: rgba(var(--accent-rgb), 0.88);
-  border-color: rgba(var(--accent-rgb), 0.95);
-}
-
-.dui-toggle-mark {
-  width: 8px;
-  height: 5px;
-  border-left: 2px solid rgba(248, 249, 252, 0.96);
-  border-bottom: 2px solid rgba(248, 249, 252, 0.96);
-  transform: rotate(-45deg) translateY(-1px);
-  opacity: 0;
-}
-
-.dui-toggle.is-on .dui-toggle-mark {
-  opacity: 1;
-}
-
-.dui-slider-track {
-  position: absolute;
-  border-radius: 999px;
-  background: rgba(55, 58, 72, 0.98);
-}
-
-.dui-slider-fill {
-  position: absolute;
-  left: 0;
-  top: 0;
-  bottom: 0;
-  border-radius: 999px;
-  background: linear-gradient(90deg, rgba(var(--accent-rgb), 0.98), rgba(var(--accent-rgb), 0.55));
-}
-
-.dui-slider-knob {
-  position: absolute;
-  width: 10px;
-  height: 10px;
-  margin-left: -5px;
-  margin-top: -4px;
-  border-radius: 50%;
-  background: rgba(245, 247, 252, 1);
-}
-
-.dui-selector {
-  position: absolute;
-  border-radius: 4px;
-  background: rgba(30, 30, 36, 0.98);
-  border: 1px solid rgba(70, 71, 82, 0.88);
-}
-
-.dui-selector-arrow,
-.dui-selector-value,
-.dui-button-label {
-  position: absolute;
-  display: grid;
-  place-items: center;
-}
-
-.dui-selector-arrow {
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.dui-selector-value {
-  color: rgba(239, 242, 247, 0.98);
-  font-size: 12px;
-  font-weight: 600;
-}
-
-.dui-action {
-  position: absolute;
-  border-radius: 5px;
-  background: rgba(var(--accent-rgb), 0.2);
-  border: 1px solid rgba(var(--accent-rgb), 0.3);
-}
-
-.dui-button-label {
-  color: rgba(244, 247, 252, 0.98);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.dui-summary-card {
-  position: absolute;
-  border-radius: 18px;
-  background:
-    linear-gradient(180deg, rgba(255, 255, 255, 0.035), transparent 10%),
-    linear-gradient(180deg, rgba(18, 21, 29, 0.98), rgba(14, 18, 27, 0.98));
-  border: 1px solid rgba(255, 255, 255, 0.07);
-  overflow: hidden;
-}
-
-.dui-summary-title {
-  position: absolute;
-  color: rgba(240, 244, 250, 0.98);
-  font-size: 17px;
-  font-weight: 700;
-}
-
-.dui-summary-subtitle {
-  position: absolute;
-  color: rgba(129, 136, 152, 0.92);
-  font-size: 11px;
-}
-
-.dui-summary-label {
-  position: absolute;
-  color: rgba(124, 131, 147, 0.94);
-  font-size: 10px;
-  text-transform: uppercase;
-  letter-spacing: 0.08em;
-}
-
-.dui-summary-value {
-  position: absolute;
-  color: rgba(235, 239, 245, 0.98);
-  font-size: 15px;
-  font-weight: 600;
-}
-
-.dui-help-box {
-  position: absolute;
-  border-radius: 14px;
-  background: rgba(255, 255, 255, 0.03);
-  border: 1px solid rgba(255, 255, 255, 0.04);
-}
-
-.dui-help-title {
-  position: absolute;
-  color: var(--accent);
-  font-size: 12px;
-  font-weight: 700;
-}
-
-.dui-help-line {
-  position: absolute;
-  color: rgba(209, 214, 223, 0.96);
-  font-size: 11px;
-}
-
-.dui-footer-left,
-.dui-footer-center,
-.dui-footer-right {
-  position: absolute;
-  color: rgba(125, 132, 147, 0.94);
-  font-size: 11px;
-}
-
-.dui-footer-right {
-  color: rgba(150, 157, 172, 0.94);
-}
-
-.dui-scroll-track {
-  position: absolute;
-  border-radius: 999px;
-  background: rgba(42, 46, 57, 0.9);
-}
-
-.dui-scroll-thumb {
-  position: absolute;
-  border-radius: 999px;
-  background: linear-gradient(180deg, rgba(var(--accent-rgb), 0.98), rgba(var(--accent-rgb), 0.5));
-}
-
-@keyframes dui-enter {
-  from {
-    opacity: 0;
-    transform: translateY(8px) scale(0.992);
+const state = {
+  visible: false,
+  categories: [],
+  currentCategoryIndex: 2,
+  currentTabIndex: 1,
+  currentItemIndex: 1,
+  playerName: "display menu",
+  menuKeyLabel: "1",
+  themeName: "Blue",
+  selectingKey: false,
+  selectingBind: false,
+  inputOpen: false
+};
+
+const app = document.getElementById("app");
+const playerName = document.getElementById("playerName");
+const menuKey = document.getElementById("menuKey");
+const themeName = document.getElementById("themeName");
+const panelTitle = document.getElementById("panelTitle");
+const contentTitle = document.getElementById("contentTitle");
+const contentMeta = document.getElementById("contentMeta");
+const categoryList = document.getElementById("categoryList");
+const tabList = document.getElementById("tabList");
+const sectionGrid = document.getElementById("sectionGrid");
+const statusPills = document.getElementById("statusPills");
+const closeButton = document.getElementById("closeButton");
+
+const resourceName = typeof GetParentResourceName === "function" ? GetParentResourceName() : "arcane-menu";
+
+function post(eventName, payload = {}) {
+  return fetch(`https://${resourceName}/${eventName}`, {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json"
+    },
+    body: JSON.stringify(payload)
+  }).catch(() => null);
+}
+
+function clamp(value, min, max) {
+  return Math.min(Math.max(value, min), max);
+}
+
+function formatValue(value) {
+  if (typeof value === "number") {
+    if (Math.abs(value - Math.round(value)) < 0.001) {
+      return String(Math.round(value));
+    }
+    return value.toFixed(2).replace(/0+$/, "").replace(/\.$/, "");
   }
-  to {
-    opacity: 1;
-    transform: translateY(0) scale(1);
+  if (typeof value === "boolean") {
+    return value ? "On" : "Off";
   }
+  return value == null ? "" : String(value);
 }
 
-@keyframes dui-card-in {
-  from {
-    opacity: 0;
-    transform: translateY(5px);
+function getCategoryMonogram(label) {
+  const clean = String(label || "").trim();
+  if (!clean) {
+    return "AR";
   }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
+  return clean
+    .split(/\s+/)
+    .slice(0, 2)
+    .map((chunk) => chunk[0])
+    .join("")
+    .toUpperCase();
 }
+
+function getCurrentCategory() {
+  return state.categories.find((category) => category.categoryIndex === state.currentCategoryIndex) || state.categories[0] || null;
+}
+
+function getCurrentTab(category) {
+  if (!category || !Array.isArray(category.tabs) || category.tabs.length === 0) {
+    return null;
+  }
+  return category.tabs.find((tab) => tab.tabIndex === state.currentTabIndex) || category.tabs[0];
+}
+
+function buildSections(items) {
+  const rows = Array.isArray(items) ? items : [];
+  const sections = [];
+  let currentSection = {
+    title: "General",
+    items: []
+  };
+
+  rows.forEach((item) => {
+    if (item.kind === "separator") {
+      if (currentSection.items.length > 0) {
+        sections.push(currentSection);
+      }
+      currentSection = {
+        title: item.label || "Section",
+        items: []
+      };
+      return;
+    }
+    currentSection.items.push(item);
+  });
+
+  if (currentSection.items.length > 0) {
+    sections.push(currentSection);
+  }
+
+  if (sections.length === 0) {
+    return [{
+      title: "Items",
+      items: rows.filter((item) => item.kind !== "separator")
+    }];
+  }
+
+  return sections;
+}
+
+function setVisible(visible) {
+  state.visible = !!visible;
+  app.classList.toggle("is-hidden", !state.visible);
+}
+
+function setAccent(accentColor) {
+  if (!accentColor || typeof accentColor !== "object") {
+    return;
+  }
+  const r = clamp(Number(accentColor.r) || 0, 0, 255);
+  const g = clamp(Number(accentColor.g) || 0, 0, 255);
+  const b = clamp(Number(accentColor.b) || 0, 0, 255);
+  document.documentElement.style.setProperty("--accent-rgb", `${r}, ${g}, ${b}`);
+}
+
+function renderStatus() {
+  const pills = [];
+
+  pills.push(`<span class="status-pill is-accent">${state.themeName || "Theme"}</span>`);
+
+  if (state.selectingKey) {
+    pills.push('<span class="status-pill">Capturing menu key</span>');
+  }
+  if (state.selectingBind) {
+    pills.push('<span class="status-pill">Capturing bind</span>');
+  }
+  if (state.inputOpen) {
+    pills.push('<span class="status-pill">Text input active</span>');
+  }
+
+  statusPills.innerHTML = pills.join("");
+}
+
+function renderCategories() {
+  categoryList.innerHTML = state.categories.map((category) => {
+    const active = category.categoryIndex === state.currentCategoryIndex ? " is-active" : "";
+    return `
+      <button class="category-button${active}" type="button" data-category-index="${category.categoryIndex}">
+        <span class="category-button__mono">${getCategoryMonogram(category.label)}</span>
+        <span class="category-button__text">${category.label}</span>
+      </button>
+    `;
+  }).join("");
+}
+
+function renderTabs(category) {
+  const tabs = category && Array.isArray(category.tabs) ? category.tabs : [];
+  tabList.innerHTML = tabs.map((tab) => {
+    const active = tab.tabIndex === state.currentTabIndex ? " is-active" : "";
+    return `<button class="tab-button${active}" type="button" data-tab-index="${tab.tabIndex}">${tab.label}</button>`;
+  }).join("");
+}
+
+function renderActionControls(categoryIndex, tabIndex, item) {
+  const bind = item.bindLabel ? `<span class="bind-chip">${item.bindLabel}</span>` : "";
+
+  if (item.kind === "toggle") {
+    const sliderStack = item.sliderValue !== undefined ? `
+      <div class="slider-stack">
+        <span class="slider-readout">${formatValue(item.sliderValue)}</span>
+        <input
+          class="slider-input"
+          type="range"
+          min="${Number(item.sliderMin ?? 0)}"
+          max="${Number(item.sliderMax ?? 100)}"
+          step="${Number(item.sliderStep ?? 0.1)}"
+          value="${Number(item.sliderValue ?? item.sliderMin ?? 0)}"
+          data-slider-item="${item.itemIndex}"
+          data-category-index="${categoryIndex}"
+          data-tab-index="${tabIndex}"
+          data-mode="toggle-slider"
+        >
+      </div>
+    ` : "";
+
+    return `
+      <div class="option-row__stack">
+        <div class="option-row__controls">
+          ${bind}
+          <button
+            class="toggle-button${item.enabled ? " is-on" : ""}"
+            type="button"
+            data-primary-item="${item.itemIndex}"
+            data-category-index="${categoryIndex}"
+            data-tab-index="${tabIndex}"
+          ></button>
+        </div>
+        ${sliderStack}
+      </div>
+    `;
+  }
+
+  if (item.kind === "slider") {
+    return `
+      <div class="slider-stack">
+        <span class="slider-readout">${formatValue(item.value)}</span>
+        <input
+          class="slider-input"
+          type="range"
+          min="${Number(item.min ?? 0)}"
+          max="${Number(item.max ?? 100)}"
+          step="${Number(item.step ?? 1)}"
+          value="${Number(item.value ?? item.min ?? 0)}"
+          data-slider-item="${item.itemIndex}"
+          data-category-index="${categoryIndex}"
+          data-tab-index="${tabIndex}"
+          data-mode="slider"
+        >
+      </div>
+    `;
+  }
+
+  if (item.kind === "selector" || item.kind === "toggle_selector") {
+    const toggle = item.kind === "toggle_selector" ? `
+      <button
+        class="toggle-button${item.enabled ? " is-on" : ""}"
+        type="button"
+        data-primary-item="${item.itemIndex}"
+        data-category-index="${categoryIndex}"
+        data-tab-index="${tabIndex}"
+      ></button>
+    ` : "";
+
+    return `
+      <div class="option-row__controls">
+        ${bind}
+        <div class="selector">
+          <button
+            class="selector-button"
+            type="button"
+            data-adjust-item="${item.itemIndex}"
+            data-direction="-1"
+            data-category-index="${categoryIndex}"
+            data-tab-index="${tabIndex}"
+          >&lt;</button>
+          <div class="selector-value">${formatValue(item.displayValue)}</div>
+          <button
+            class="selector-button"
+            type="button"
+            data-adjust-item="${item.itemIndex}"
+            data-direction="1"
+            data-category-index="${categoryIndex}"
+            data-tab-index="${tabIndex}"
+          >&gt;</button>
+        </div>
+        ${toggle}
+      </div>
+    `;
+  }
+
+  return `
+    <div class="option-row__controls">
+      ${bind}
+      <button
+        class="control-button"
+        type="button"
+        data-primary-item="${item.itemIndex}"
+        data-category-index="${categoryIndex}"
+        data-tab-index="${tabIndex}"
+      >
+        ${item.kind === "action" ? "Run" : "Select"}
+      </button>
+    </div>
+  `;
+}
+
+function renderSections(category, tab) {
+  if (!category || !tab) {
+    sectionGrid.innerHTML = '<div class="empty-card">No content available.</div>';
+    contentMeta.textContent = "0 options";
+    return;
+  }
+
+  const sections = buildSections(tab.items || []);
+  const flatCount = (tab.items || []).filter((item) => item.kind !== "separator").length;
+  contentMeta.textContent = `${flatCount} option${flatCount === 1 ? "" : "s"}`;
+
+  sectionGrid.innerHTML = sections.map((section) => `
+    <article class="section-card">
+      <header class="section-card__header">
+        <span class="section-card__title">${section.title}</span>
+      </header>
+      <div class="section-card__body">
+        ${section.items.map((item) => `
+          <div class="option-row">
+            <div class="option-row__main">
+              <span class="option-row__label">${item.label}</span>
+              <span class="option-row__meta">${item.kind.replace(/_/g, " ")}</span>
+            </div>
+            ${renderActionControls(category.categoryIndex, tab.tabIndex, item)}
+          </div>
+        `).join("")}
+      </div>
+    </article>
+  `).join("");
+}
+
+function render() {
+  setVisible(state.visible);
+  playerName.textContent = state.playerName || "display menu";
+  menuKey.textContent = state.menuKeyLabel || "1";
+  themeName.textContent = `${state.themeName || "Blue"} theme`;
+  renderStatus();
+  renderCategories();
+
+  const category = getCurrentCategory();
+  const tab = getCurrentTab(category);
+
+  panelTitle.textContent = category ? category.label : "Arcane";
+  contentTitle.textContent = tab ? tab.label : "Overview";
+
+  renderTabs(category);
+  renderSections(category, tab);
+}
+
+function handleMessage(data) {
+  if (!data || typeof data !== "object") {
+    return;
+  }
+
+  if (data.action !== "arcane:setState") {
+    return;
+  }
+
+  if (data.visible === false) {
+    state.visible = false;
+    render();
+    return;
+  }
+
+  state.visible = !!data.visible;
+  state.categories = Array.isArray(data.categories) ? data.categories : [];
+  state.currentCategoryIndex = Number(data.currentCategoryIndex) || 2;
+  state.currentTabIndex = Number(data.currentTabIndex) || 1;
+  state.currentItemIndex = Number(data.currentItemIndex) || 1;
+  state.playerName = data.playerName || "display menu";
+  state.menuKeyLabel = data.menuKeyLabel || "1";
+  state.themeName = data.themeName || "Blue";
+  state.selectingKey = !!data.selectingKey;
+  state.selectingBind = !!data.selectingBind;
+  state.inputOpen = !!data.inputOpen;
+  setAccent(data.accentColor);
+  render();
+}
+
+closeButton.addEventListener("click", () => {
+  post("arcaneClose");
+});
+
+document.addEventListener("click", (event) => {
+  const categoryButton = event.target.closest(".category-button");
+  if (categoryButton) {
+    const categoryIndex = Number(categoryButton.dataset.categoryIndex);
+    post("arcaneSelectCategory", { categoryIndex });
+    return;
+  }
+
+  const tabButton = event.target.closest(".tab-button");
+  if (tabButton) {
+    const tabIndex = Number(tabButton.dataset.tabIndex);
+    post("arcaneSelectTab", { tabIndex });
+    return;
+  }
+
+  const primaryButton = event.target.closest("[data-primary-item]");
+  if (primaryButton) {
+    post("arcaneItemPrimary", {
+      categoryIndex: Number(primaryButton.dataset.categoryIndex),
+      tabIndex: Number(primaryButton.dataset.tabIndex),
+      itemIndex: Number(primaryButton.dataset.primaryItem)
+    });
+    return;
+  }
+
+  const adjustButton = event.target.closest("[data-adjust-item]");
+  if (adjustButton) {
+    post("arcaneItemAdjust", {
+      categoryIndex: Number(adjustButton.dataset.categoryIndex),
+      tabIndex: Number(adjustButton.dataset.tabIndex),
+      itemIndex: Number(adjustButton.dataset.adjustItem),
+      direction: Number(adjustButton.dataset.direction)
+    });
+  }
+});
+
+document.addEventListener("input", (event) => {
+  const slider = event.target.closest("[data-slider-item]");
+  if (!slider) {
+    return;
+  }
+
+  const min = Number(slider.min || 0);
+  const max = Number(slider.max || 100);
+  const value = Number(slider.value || min);
+  const percent = max === min ? 0 : (value - min) / (max - min);
+
+  post("arcaneItemSlider", {
+    categoryIndex: Number(slider.dataset.categoryIndex),
+    tabIndex: Number(slider.dataset.tabIndex),
+    itemIndex: Number(slider.dataset.sliderItem),
+    percent
+  });
+});
+
+window.addEventListener("keydown", (event) => {
+  if (!state.visible) {
+    return;
+  }
+
+  if (event.key === "Escape" || event.key === "Backspace") {
+    event.preventDefault();
+    post("arcaneClose");
+  }
+});
+
+window.addEventListener("message", (event) => {
+  handleMessage(event.data);
+});
+
+post("arcaneReady");
+render();
