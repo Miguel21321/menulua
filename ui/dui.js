@@ -1,5 +1,6 @@
 const app = document.getElementById("app");
 const root = document.getElementById("root");
+const boot = document.getElementById("boot");
 
 function clamp(value, min, max) {
   return Math.min(Math.max(value, min), max);
@@ -215,6 +216,10 @@ function renderTab(button) {
 }
 
 function renderState(data) {
+  if (boot) {
+    boot.classList.add("is-hidden");
+  }
+
   if (!data?.visible) {
     app.classList.add("is-hidden");
     root.innerHTML = "";
