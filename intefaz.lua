@@ -780,6 +780,14 @@ local function ArcaneBuildDuiUrl(html)
     return "data:text/html;charset=utf-8," .. ArcaneUrlEncode(html)
 end
 
+local function ArcaneGetRemoteDuiUrl()
+    if type(_G) == "table" and type(_G.__ARCANE_DUI_REMOTE_URL) == "string" and _G.__ARCANE_DUI_REMOTE_URL ~= "" then
+        return _G.__ARCANE_DUI_REMOTE_URL
+    end
+
+    return nil
+end
+
 function Menu.ShouldUseDuiDisplayMenu()
     local supported = ArcaneCanUseDuiDisplayMenu()
     Menu.DuiDisplayMenuSupported = supported
@@ -841,7 +849,9 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
         Menu.DestroyDuiDisplayMenu()
     end
 
-    if not Menu.DuiDisplayMenuHtml then
+    local remoteDuiUrl = ArcaneGetRemoteDuiUrl()
+
+    if not remoteDuiUrl and not Menu.DuiDisplayMenuHtml then
         Menu.DuiDisplayMenuHtml = ArcaneBuildDuiHtml()
         if not Menu.DuiDisplayMenuHtml then
             DisableDuiDisplayMenu("assets", "Arcane DUI error: could not read ui/dui.html, ui/dui.css or ui/dui.js")
@@ -850,7 +860,7 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
     end
 
     if not Menu.DuiDisplayMenuObject then
-        local duiUrl = ArcaneBuildDuiUrl(Menu.DuiDisplayMenuHtml)
+        local duiUrl = remoteDuiUrl or ArcaneBuildDuiUrl(Menu.DuiDisplayMenuHtml)
         local suffix = tostring(math.floor((GetGameTimer and GetGameTimer() or 0) + math.random(1000, 9999)))
 
         Menu.DuiDisplayMenuTxdName = "arcane_dui_txd_" .. suffix
