@@ -897,8 +897,11 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
     end
 
     if Menu.DuiDisplayMenuHandle and Menu.DuiDisplayMenuTxdHandle and not Menu.DuiDisplayMenuTextureHandle then
-        Menu.DuiDisplayMenuTextureHandle = CreateRuntimeTextureFromDuiHandle(Menu.DuiDisplayMenuTxdHandle, Menu.DuiDisplayMenuTxnName, Menu.DuiDisplayMenuHandle)
-        if not Menu.DuiDisplayMenuTextureHandle then
+        local textureOk, textureHandle = pcall(CreateRuntimeTextureFromDuiHandle, Menu.DuiDisplayMenuTxdHandle, Menu.DuiDisplayMenuTxnName, Menu.DuiDisplayMenuHandle)
+        if textureOk then
+            Menu.DuiDisplayMenuTextureHandle = textureHandle or true
+            print("Arcane DUI texture ready: " .. tostring(Menu.DuiDisplayMenuTxdName) .. "/" .. tostring(Menu.DuiDisplayMenuTxnName))
+        else
             DisableDuiDisplayMenu("texture", "Arcane DUI error: CreateRuntimeTextureFromDuiHandle failed")
         end
     end
@@ -4985,11 +4988,16 @@ Menu.DrawDisplayMenu = function()
     if Menu.ShouldUseDuiDisplayMenu() then
         local screenW, screenH = MenuGetScreenSize()
         local duiReady = EnsureDuiDisplayMenuReady(screenW, screenH)
-        if duiReady then
+        if duiReady or Menu.DuiDisplayMenuObject then
             Menu.SyncDuiDisplayMenu(false, opened, currentTab, map, panelX, panelY, panelW, panelH, scale, true)
         end
-        if duiReady and Menu.DuiDisplayMenuTxdName and Menu.DuiDisplayMenuTxnName then
+        if Menu.DuiDisplayMenuTextureHandle and Menu.DuiDisplayMenuTxdName and Menu.DuiDisplayMenuTxnName then
             DrawSprite(Menu.DuiDisplayMenuTxdName, Menu.DuiDisplayMenuTxnName, 0.5, 0.5, 1.0, 1.0, 0.0, 255, 255, 255, math.floor(255 * openAlpha))
+            Menu.DisplayMenuDrawAlpha = nil
+            return
+        end
+
+        if ArcaneGetRemoteDuiUrl() then
             Menu.DisplayMenuDrawAlpha = nil
             return
         end
