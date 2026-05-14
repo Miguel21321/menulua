@@ -79,7 +79,6 @@ local function ArcaneGetMissingDuiCoreNatives()
         CreateRuntimeTxd = CreateRuntimeTxd,
         CreateRuntimeTextureFromDuiHandle = CreateRuntimeTextureFromDuiHandle,
         DestroyDui = DestroyDui,
-        IsDuiAvailable = IsDuiAvailable,
         SendDuiMessage = SendDuiMessage,
         DrawSprite = DrawSprite
     }
@@ -795,7 +794,7 @@ function Menu.ShouldUseDuiDisplayMenu()
         Menu.DuiDisplayMenuMissingLogged = false
     end
 
-    return supported and not Menu.DuiDisplayMenuDisabled and not Menu.ShouldUseNuiDisplayMenu()
+    return supported and not Menu.DuiDisplayMenuDisabled
 end
 
 function Menu.DestroyDuiDisplayMenu(preserveFailureState)
@@ -870,7 +869,7 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
         return false
     end
 
-    if not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
+    if type(IsDuiAvailable) == "function" and not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
         local now = GetGameTimer and GetGameTimer() or 0
         if (now - (Menu.DuiDisplayMenuCreatedAt or 0)) > 1800 then
             DisableDuiDisplayMenu("load", "Arcane DUI error: browser never became available")
@@ -902,7 +901,11 @@ function Menu.SyncDuiDisplayMenuMessage(payload)
 end
 
 function Menu.UpdateDuiDisplayMenuMouse(mouseX, mouseY, leftDown, rightDown)
-    if not Menu.ShouldUseDuiDisplayMenu() or not Menu.DuiDisplayMenuObject or not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
+    if not Menu.ShouldUseDuiDisplayMenu() or not Menu.DuiDisplayMenuObject then
+        return
+    end
+
+    if type(IsDuiAvailable) == "function" and not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
         return
     end
 
@@ -952,7 +955,7 @@ local function SetInteractiveOverlayState(enable)
 end
 
 function Menu.ShouldUseNuiDisplayMenu()
-    return Menu.NuiDisplayMenuSupported == true
+    return Menu.NuiDisplayMenuSupported == true and not Menu.ShouldUseDuiDisplayMenu()
 end
 
 local function IsInteractiveOverlayActive()
