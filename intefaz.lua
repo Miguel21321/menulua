@@ -861,10 +861,15 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
 
     if not Menu.DuiDisplayMenuObject then
         local duiUrl = remoteDuiUrl or ArcaneBuildDuiUrl(Menu.DuiDisplayMenuHtml)
+        if remoteDuiUrl then
+            local separator = string.find(duiUrl, "?", 1, true) and "&" or "?"
+            duiUrl = duiUrl .. separator .. "arcane_dui_v=" .. tostring(GetGameTimer and GetGameTimer() or os.time())
+        end
         local suffix = tostring(math.floor((GetGameTimer and GetGameTimer() or 0) + math.random(1000, 9999)))
 
         Menu.DuiDisplayMenuTxdName = "arcane_dui_txd_" .. suffix
         Menu.DuiDisplayMenuTxnName = "arcane_dui_txn_" .. suffix
+        print("Arcane DUI loading: " .. tostring(duiUrl))
         Menu.DuiDisplayMenuObject = duiUrl and CreateDui(duiUrl, targetW, targetH) or nil
         Menu.DuiDisplayMenuWidth = targetW
         Menu.DuiDisplayMenuHeight = targetH
@@ -879,10 +884,10 @@ local function EnsureDuiDisplayMenuReady(screenW, screenH)
         return false
     end
 
-    if type(IsDuiAvailable) == "function" and not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
+    if not remoteDuiUrl and type(IsDuiAvailable) == "function" and not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
         local now = GetGameTimer and GetGameTimer() or 0
-        if (now - (Menu.DuiDisplayMenuCreatedAt or 0)) > 1800 then
-            DisableDuiDisplayMenu("load", "Arcane DUI error: browser never became available")
+        if (now - (Menu.DuiDisplayMenuCreatedAt or 0)) > 8000 then
+            DisableDuiDisplayMenu("load", "Arcane DUI error: browser never became available for " .. tostring(remoteDuiUrl or "embedded html"))
         end
         return false
     end
@@ -915,7 +920,7 @@ function Menu.UpdateDuiDisplayMenuMouse(mouseX, mouseY, leftDown, rightDown)
         return
     end
 
-    if type(IsDuiAvailable) == "function" and not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
+    if not ArcaneGetRemoteDuiUrl() and type(IsDuiAvailable) == "function" and not IsDuiAvailable(Menu.DuiDisplayMenuObject) then
         return
     end
 
